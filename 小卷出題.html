@@ -40,16 +40,17 @@
     /* 國字注音答題方格（標準一個字一格，乾淨正方形） */
     .char-box {
       border: 1.5px solid #1f2937;
-      width: 36px;
-      height: 36px;
+      width: 38px;
+      height: 38px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       position: relative;
       background: #fff;
-      font-size: 1.05rem;
       line-height: 1;
       flex-shrink: 0;
+      overflow: hidden;
+      box-sizing: border-box;
     }
 
     /* 田字格十字輔助虛線（選用） */
@@ -387,10 +388,14 @@
                 <span>座號：＿＿</span>
                 <span>姓名：＿＿＿＿＿＿</span>
               </div>
-              <!-- 得分框 -->
-              <div class="border border-slate-900 px-4 py-1 text-base tracking-wider flex items-center gap-2">
-                <span>得分：</span>
-                <span id="teacher-answer-hint" class="text-rose-600 font-sans hidden font-bold text-xs">[教師解答版]</span>
+              <!-- 得分框 (加大尺寸，方便老師與小老師紅筆批改打分數) -->
+              <div class="border-2 border-slate-900 rounded flex overflow-hidden self-end mb-0.5 shadow-2xs">
+                <div class="bg-slate-100 border-r-2 border-slate-900 px-3 py-2 flex items-center justify-center font-bold tracking-widest text-slate-800 text-sm select-none">
+                  得分
+                </div>
+                <div class="w-20 sm:w-24 h-11 flex items-center justify-center relative bg-white">
+                  <span id="teacher-answer-hint" class="text-rose-600 font-sans hidden font-bold text-xs">[解答版]</span>
+                </div>
               </div>
             </div>
           </div>
@@ -531,8 +536,8 @@
             <i data-lucide="sheet" class="w-5 h-5"></i>
           </div>
           <div>
-            <h3 class="text-base font-bold text-slate-900">公版題庫雲端（Google 試算表 / 表單）</h3>
-            <p class="text-xs text-slate-500">提供現成整理好的國文各版本、課次詞彙與注釋公版檔案</p>
+            <h3 class="text-base font-bold text-slate-900">公版題庫雲端（Google 試算表）</h3>
+            <p class="text-xs text-slate-500">已整理好各版本、課次詞彙與注釋公版檔案</p>
           </div>
         </div>
         <button onclick="closePublicCloudModal()" class="text-slate-400 hover:text-slate-600">
@@ -541,27 +546,20 @@
       </div>
 
       <!-- 公版連結與開啟按鈕 -->
-      <div class="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4 space-y-3">
-        <div class="flex items-start justify-between gap-2">
-          <div>
-            <span class="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
-              <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600"></i>公版題庫共編雲端連結
-            </span>
-            <p class="text-xs text-emerald-700 mt-1">內含各年級國文（康軒、翰林、南一）標準課次詞彙與注釋。</p>
-          </div>
-          <a id="cloud-open-link" href="https://docs.google.com/spreadsheets" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm transition">
-            <i data-lucide="external-link" class="w-4 h-4"></i>開啟雲端表單
-          </a>
+      <div class="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div class="space-y-0.5 text-left w-full">
+          <span class="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
+            <i data-lucide="check-circle" class="w-4 h-4 text-emerald-600"></i>公版題庫共編雲端
+          </span>
+          <p class="text-xs text-emerald-700">內含國文各版本標準課次詞彙與注釋，點擊立即前往。</p>
         </div>
-
-        <div class="flex items-center gap-2 pt-2 border-t border-emerald-100">
-          <input type="text" id="custom-cloud-url" class="flex-1 bg-white border border-emerald-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-emerald-500" value="https://docs.google.com/spreadsheets/d/1_YOUR_GOOGLE_SHEET_ID_HERE/edit?usp=sharing">
-          <button onclick="copyCloudUrl()" class="px-3 py-1.5 bg-white border border-emerald-300 hover:bg-emerald-100/50 text-emerald-800 rounded-lg text-xs font-semibold transition flex items-center gap-1">
+        <div class="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+          <button onclick="copyCloudUrl()" class="px-3 py-2 bg-white border border-emerald-300 hover:bg-emerald-100/60 text-emerald-800 rounded-lg text-xs font-semibold transition flex items-center gap-1">
             <i data-lucide="copy" class="w-3.5 h-3.5"></i>複製連結
           </button>
-          <button onclick="saveCloudUrl()" class="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-semibold transition">
-            儲存自訂網址
-          </button>
+          <a id="cloud-open-link" href="https://docs.google.com/spreadsheets/d/17GvYi-a0-QbPPUNh8-cj4h4PW4iO06KmQdBUQzNd8Mo/edit?usp=sharing" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-sm transition">
+            <i data-lucide="external-link" class="w-4 h-4"></i>開啟雲端試算表
+          </a>
         </div>
       </div>
 
@@ -880,6 +878,60 @@
         return COMMON_ZHUYIN_DICT[char];
       }
       return '';
+    }
+
+    // 教科書標準「直式注音符號排版引擎」，解決注音在正方形格子內擠壓折成四宮格的問題
+    function renderAnswerBoxContent(ansText) {
+      if (!ansText) return '';
+      
+      // 判斷是否為注音符號（含注音符號 Unicode 區間 \u3105-\u312F）
+      const hasZhuyin = /[\u3105-\u312F]/.test(ansText);
+      
+      // 1. 若答案是國字：直接以大字號標楷體居中呈現
+      if (!hasZhuyin) {
+        return `<span class="text-rose-600 font-bold text-xl leading-none select-none z-10 relative">${ansText}</span>`;
+      }
+
+      // 2. 若答案是注音：依照台灣教育部規範拆解為直式排版（主體直排＋右側調號）
+      let tone = '';
+      const cleanSymbols = [];
+      const chars = ansText.split('');
+
+      chars.forEach(ch => {
+        if (['ˊ', 'ˇ', 'ˋ', '˙'].includes(ch)) {
+          tone = ch;
+        } else if (/[\u3105-\u312F]/.test(ch)) {
+          cleanSymbols.push(ch);
+        }
+      });
+
+      const count = cleanSymbols.length;
+      let symbolStyle = 'text-[14px] leading-[14px]';
+      if (count >= 3) {
+        symbolStyle = 'text-[11.5px] leading-[11px] tracking-tight';
+      } else if (count === 2) {
+        symbolStyle = 'text-[13.5px] leading-[13px]';
+      } else {
+        symbolStyle = 'text-[16px] leading-[16px]';
+      }
+
+      const isLightTone = tone === '˙';
+
+      return `
+        <div class="relative w-full h-full flex items-center justify-center select-none z-10">
+          <!-- 注音符號本體（由上往下直排，微偏左騰出右側調號空間） -->
+          <div class="flex flex-col items-center justify-center font-bold text-rose-600 ${symbolStyle} ${(!isLightTone && tone) ? '-ml-2' : ''}">
+            ${isLightTone ? '<span class="text-[9px] leading-none mb-0.5">˙</span>' : ''}
+            ${cleanSymbols.map(s => `<span class="block">${s}</span>`).join('')}
+          </div>
+          <!-- 聲調符號（二、三、四聲精確貼齊於韻母右側） -->
+          ${(!isLightTone && tone) ? `
+            <span class="absolute text-rose-600 font-bold text-xs leading-none select-none" style="right: 5px; top: ${count >= 3 ? '44%' : '36%'};">
+              ${tone}
+            </span>
+          ` : ''}
+        </div>
+      `;
     }
 
     // 示範題庫：國字注音不需手動填寫答案，全由教師選字與自動偵測注音
@@ -1833,9 +1885,10 @@
               itemsToTest.forEach(item => {
                 const ansText = currentPaperMode === 'teacher' ? item.answer : '';
                 const gridStyle = tianGrid ? 'tian-grid' : '';
+                const contentHtml = currentPaperMode === 'teacher' ? renderAnswerBoxContent(ansText) : '';
                 boxesHtml += `
                   <div class="char-box ${gridStyle}">
-                    <span class="text-rose-600 font-bold text-sm">${ansText}</span>
+                    ${contentHtml}
                   </div>
                 `;
               });
@@ -2313,15 +2366,12 @@
       showToast(`已下載「${modeLabel}」HTML 檔案！雙擊即可在瀏覽器或 Word 中開啟並列印。`);
     }
 
-    // 公版雲端題庫彈窗與網址設定
-    let publicCloudSheetUrl = 'https://docs.google.com/spreadsheets/d/1_YOUR_GOOGLE_SHEET_ID_HERE/edit?usp=sharing';
+    // 公版雲端題庫彈窗與網址設定（固定為指定公版 Google 試算表）
+    const FIXED_CLOUD_SHEET_URL = 'https://docs.google.com/spreadsheets/d/17GvYi-a0-QbPPUNh8-cj4h4PW4iO06KmQdBUQzNd8Mo/edit?usp=sharing';
 
     function openPublicCloudModal() {
-      const urlInput = document.getElementById('custom-cloud-url');
       const openLink = document.getElementById('cloud-open-link');
-      
-      urlInput.value = publicCloudSheetUrl;
-      openLink.href = publicCloudSheetUrl;
+      if (openLink) openLink.href = FIXED_CLOUD_SHEET_URL;
       document.getElementById('cloud-modal').classList.remove('hidden');
     }
 
@@ -2329,22 +2379,13 @@
       document.getElementById('cloud-modal').classList.add('hidden');
     }
 
-    function saveCloudUrl() {
-      const input = document.getElementById('custom-cloud-url');
-      const val = input.value.trim();
-      if (!val) {
-        showToast('請輸入有效的 Google 試算表/表單網址');
-        return;
-      }
-      publicCloudSheetUrl = val;
-      document.getElementById('cloud-open-link').href = val;
-      showToast('已更新公版題庫雲端連結！');
-    }
-
     function copyCloudUrl() {
-      const input = document.getElementById('custom-cloud-url');
-      input.select();
+      const tempInput = document.createElement('textarea');
+      tempInput.value = FIXED_CLOUD_SHEET_URL;
+      document.body.appendChild(tempInput);
+      tempInput.select();
       document.execCommand('copy');
+      document.body.removeChild(tempInput);
       showToast('已複製公版雲端題庫網址至剪貼簿！');
     }
 
