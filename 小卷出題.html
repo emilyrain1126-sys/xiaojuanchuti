@@ -920,6 +920,7 @@
     let currentPaperMode = 'student'; // 'student' | 'teacher' | 'punish'
     let pendingWorkbook = null;
     let pendingFileName = '';
+    let isTitleManuallyEdited = false;
 
     let editingCharContext = {
       questionId: null,
@@ -1287,6 +1288,8 @@
     function initEmptyState() {
       questionBank = [];
       selectedQuestionIds.clear();
+      isTitleManuallyEdited = false;
+      document.getElementById('cfg-title').value = '國文科 隨堂小卷';
       initFilterDropdowns();
       renderQuestionList();
       renderExamPaper();
@@ -1295,10 +1298,12 @@
     function loadDefaultSampleData() {
       questionBank = JSON.parse(JSON.stringify(SAMPLE_DATA));
       selectedQuestionIds.clear();
+      isTitleManuallyEdited = false;
       // 載入示範題目，預設勾選方便立即預覽排版
       questionBank.filter(q => q.type === '國字注音').forEach(q => selectedQuestionIds.add(q.id));
       
       initFilterDropdowns();
+      updateAutoExamTitle();
       renderQuestionList();
       renderExamPaper();
       showToast('已載入示範題庫！請點選字詞設定考點');
@@ -1353,10 +1358,46 @@
       renderQuestionList();
     }
 
-    function clearSearch() {
-      document.getElementById('search-keyword').value = '';
-      document.getElementById('clear-search-btn').classList.add('hidden');
-      onFilterChange();
+    function onTitleManualInput() {
+      isTitleManuallyEdited = true;
+      renderExamPaper();
+    }
+
+    // 依據目前勾選的題目，統計出題數最多的課次並自動填入考卷抬頭
+    function updateAutoExamTitle(force = false) {
+      if (isTitleManuallyEdited && !force) return;
+      const selectedList = questionBank.filter(q => selectedQuestionIds.has(q.id));
+      if (selectedList.length === 0) return;
+
+      const lessonCounts = {};
+      selectedList.forEach(q => {
+        const les = (q.lesson || '').trim();
+        if (les && les !== '未分類' && les !== '自訂課次') {
+          lessonCounts[les] = (lessonCounts[les] || 0) + 1;
+        }
+      });
+
+      let dominantLesson = '';
+      let maxCount = 0;
+      for (const [les, count] of Object.entries(lessonCounts)) {
+        if (count > maxCount) {
+          maxCount = count;
+          dominantLesson = les;
+        }
+      }
+
+      if (dominantLesson) {
+        const titleInput = document.getElementById('cfg-title');
+        titleInput.value = `國文科 ${dominantLesson} 隨堂小卷`;
+      }
+    }
+
+    function resetTitleToDominantLesson() {
+      isTitleManuallyEdited = false;
+      updateAutoExamTitle(true);
+      renderExamPaper();
+      const currentTitle = document.getElementById('cfg-title').value;
+      showToast(`已依選題重新帶入：「${currentTitle}」`);
     }
 
     function applyFilterToTitle() {
@@ -1789,6 +1830,7 @@
         selectedQuestionIds.add(id);
       }
       document.getElementById('selection-counter').innerText = `已選 ${selectedQuestionIds.size} / ${questionBank.length} 題`;
+      updateAutoExamTitle();
       renderExamPaper();
     }
 
@@ -1798,6 +1840,7 @@
         if (checked) selectedQuestionIds.add(q.id);
         else selectedQuestionIds.delete(q.id);
       });
+      updateAutoExamTitle();
       renderQuestionList();
       renderExamPaper();
     }
@@ -1826,6 +1869,7 @@
       filtered.forEach(q => selectedQuestionIds.delete(q.id));
       picked.forEach(q => selectedQuestionIds.add(q.id));
 
+      updateAutoExamTitle();
       renderQuestionList();
       renderExamPaper();
       showToast(`已隨機選取 ${picked.length} 題！`);
@@ -2491,12 +2535,15 @@
       if (importMode === 'replace') {
         questionBank = newQuestions;
         selectedQuestionIds.clear();
+        isTitleManuallyEdited = false;
         questionBank.forEach(q => selectedQuestionIds.add(q.id));
+        updateAutoExamTitle();
         showToast(`已替換題庫，成功載入 ${newQuestions.length} 題！`);
       } else {
         // 合併匯入
         questionBank = questionBank.concat(newQuestions);
         newQuestions.forEach(q => selectedQuestionIds.add(q.id));
+        updateAutoExamTitle();
         showToast(`已成功追加 ${newQuestions.length} 題！目前題庫共計 ${questionBank.length} 題。`);
       }
 
