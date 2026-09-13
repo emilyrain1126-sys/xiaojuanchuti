@@ -221,8 +221,9 @@
               <i data-lucide="clipboard" class="w-3.5 h-3.5"></i>貼上試題文字
             </button>
           </div>
-          <button onclick="loadDefaultSampleData()" class="text-xs font-medium text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded-md transition">
-            重載多版本示範題庫
+          <button onclick="loadDefaultSampleData()" class="text-xs font-medium text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded-md transition flex items-center gap-1">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+            載入示範題庫
           </button>
         </div>
       </div>
@@ -1239,7 +1240,8 @@
 
     window.addEventListener('DOMContentLoaded', () => {
       safeCreateIcons();
-      loadDefaultSampleData();
+      // 預設清空題庫，維持乾淨空白狀態，待使用者上傳或點選添加
+      initEmptyState();
 
       // 若全字庫 CDN 載入完成，刷新題庫中尚未填妥的注音
       setTimeout(() => {
@@ -1282,16 +1284,24 @@
       }
     });
 
+    function initEmptyState() {
+      questionBank = [];
+      selectedQuestionIds.clear();
+      initFilterDropdowns();
+      renderQuestionList();
+      renderExamPaper();
+    }
+
     function loadDefaultSampleData() {
       questionBank = JSON.parse(JSON.stringify(SAMPLE_DATA));
       selectedQuestionIds.clear();
-      // 預設選取前 15 題國字注音，方便即時檢視排版效果
-      questionBank.filter(q => q.type === '國字注音').slice(0, 15).forEach(q => selectedQuestionIds.add(q.id));
+      // 載入示範題目，預設勾選方便立即預覽排版
+      questionBank.filter(q => q.type === '國字注音').forEach(q => selectedQuestionIds.add(q.id));
       
       initFilterDropdowns();
       renderQuestionList();
       renderExamPaper();
-      showToast('已載入 15 題國字注音試卷樣式！');
+      showToast('已載入示範題庫！請點選字詞設定考點');
     }
 
     function initFilterDropdowns() {
@@ -1483,6 +1493,28 @@
       const filtered = getFilteredQuestions();
 
       document.getElementById('selection-counter').innerText = `已選 ${selectedQuestionIds.size} / ${questionBank.length} 題`;
+
+      if (questionBank.length === 0) {
+        listContainer.innerHTML = `
+          <div class="text-center py-14 px-4 text-xs text-slate-400 flex flex-col items-center justify-center">
+            <div class="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-500 flex items-center justify-center mb-3">
+              <i data-lucide="inbox" class="w-6 h-6"></i>
+            </div>
+            <p class="font-bold text-sm text-slate-700 mb-1">目前題庫是空的</p>
+            <p class="text-[11px] text-slate-400 mb-4 max-w-[220px]">您可以上傳 Excel、手動新增題目，或點擊下方按鈕載入示範資料</p>
+            <div class="flex flex-wrap items-center justify-center gap-2">
+              <button onclick="openManualAddModal()" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-xs transition flex items-center gap-1">
+                <i data-lucide="plus" class="w-3.5 h-3.5"></i>手動新增題目
+              </button>
+              <button onclick="loadDefaultSampleData()" class="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg text-xs font-semibold transition flex items-center gap-1">
+                <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-700"></i>載入示範題庫
+              </button>
+            </div>
+          </div>
+        `;
+        safeCreateIcons();
+        return;
+      }
 
       if (filtered.length === 0) {
         listContainer.innerHTML = `
