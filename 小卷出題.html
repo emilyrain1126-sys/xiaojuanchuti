@@ -6,30 +6,24 @@
   <title>國語文小卷快速出卷系統</title>
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- SheetJS for Excel Reading -->
-  <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
   <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- Google Fonts: Noto Serif TC & Noto Sans TC -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@500;600;700;900&display=swap" rel="stylesheet">
-  
+  <!-- SheetJS for Excel / CSV parsing -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
   <style>
-    body {
-      font-family: 'Noto Sans TC', sans-serif;
-    }
-    
-    /* 考卷專用標準印刷字體 */
-    .exam-paper-font {
-      font-family: 'DFKai-SB', 'BiauKai', 'Noto Serif TC', 'Times New Roman', serif;
+    /* 全卷標準標楷體規範 */
+    .exam-paper-font,
+    .a4-page,
+    .a4-page * {
+      font-family: 'DFKai-SB', 'BiauKai', 'Kaiti TC', 'KaiTi', 'STKaiti', 'Noto Serif TC', serif !important;
     }
 
     /* A4 預覽紙張樣式 */
     .a4-page {
       width: 210mm;
       min-height: 297mm;
-      padding: 16mm 15mm;
+      padding: 12mm 14mm;
       margin: 0 auto;
       background: white;
       box-sizing: border-box;
@@ -37,11 +31,11 @@
       position: relative;
     }
 
-    /* 國字注音答題方格（標準一個字一格，乾淨正方形） */
+    /* 國字注音答題方格（標準一個字一格） */
     .char-box {
       border: 1.5px solid #1f2937;
-      width: 38px;
-      height: 38px;
+      width: 40px;
+      height: 40px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
@@ -53,15 +47,16 @@
       box-sizing: border-box;
     }
 
-    /* 田字格十字輔助虛線（選用） */
+    /* 田字格十字輔助虛線 */
     .char-box.tian-grid::before {
       content: '';
       position: absolute;
       left: 0;
       right: 0;
       top: 50%;
-      border-top: 1px dashed #cbd5e1;
+      border-top: 1.5px dashed #94a3b8;
       pointer-events: none;
+      z-index: 1;
     }
     .char-box.tian-grid::after {
       content: '';
@@ -69,15 +64,16 @@
       top: 0;
       bottom: 0;
       left: 50%;
-      border-left: 1px dashed #cbd5e1;
+      border-left: 1.5px dashed #94a3b8;
       pointer-events: none;
+      z-index: 1;
     }
 
-    /* 列印設定：Ctrl+P 時乾淨滿版，只印考卷 */
+    /* 列印設定：Ctrl+P 時滿版純淨輸出 */
     @media print {
       @page {
         size: A4 portrait;
-        margin: 10mm 12mm 10mm 12mm;
+        margin: 0;
       }
       body {
         background: white !important;
@@ -87,20 +83,29 @@
       }
       .no-print {
         display: none !important;
+        height: 0 !important;
+        margin: 0 !important;
+        padding: 0 !important;
       }
       .a4-page {
         box-shadow: none !important;
-        padding: 0 !important;
+        border: none !important;
+        padding: 6mm 10mm !important;
         width: 100% !important;
         min-height: auto !important;
-        page-break-after: always;
+        page-break-after: auto;
+      }
+      .a4-page.is-punish {
+        padding-top: 3mm !important;
+        padding-bottom: 3mm !important;
       }
       .page-break-inside-avoid {
-        page-break-inside: avoid;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
       }
     }
 
-    /* 自定義捲軸 */
+    /* 自定義滾動條 */
     ::-webkit-scrollbar {
       width: 6px;
       height: 6px;
@@ -128,28 +133,33 @@
             國語文小卷快速出卷系統
             <span class="text-xs font-normal px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">版本課次・字詞出題</span>
           </h1>
-          <p class="text-xs text-slate-500">點擊字詞直接指定考注音或考國字，支援課次快選與 Excel 批次匯入</p>
+          <p class="text-xs text-slate-500">點擊字詞直接指定考注音或考國字，支援課次快選、三種模式與 Excel 批次匯入</p>
         </div>
       </div>
 
       <!-- 右側動作按鈕 -->
       <div class="flex items-center space-x-2 sm:space-x-3">
-        <!-- 模式切換：學生卷 / 解答卷 -->
-        <div class="bg-slate-100 p-1 rounded-lg border border-slate-200 flex items-center text-xs font-medium">
+        <!-- 模式切換：學生測驗卷 / 教師解答卷 / 罰寫訂正卷 -->
+        <div class="bg-slate-100 p-1 rounded-lg border border-slate-200 flex items-center text-xs font-medium gap-1">
           <button id="view-mode-student" class="px-3 py-1.5 rounded-md bg-white text-slate-800 shadow-sm transition-all font-semibold" onclick="setPaperMode('student')">
             學生測驗卷
           </button>
-          <button id="view-mode-teacher" class="px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition-all" onclick="setPaperMode('teacher')">
+          <button id="view-mode-teacher" class="px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition-all font-medium" onclick="setPaperMode('teacher')">
             教師解答卷
+          </button>
+          <button id="view-mode-punish" class="px-3 py-1.5 rounded-md text-amber-700 hover:text-amber-900 transition-all font-medium flex items-center gap-1" onclick="setPaperMode('punish')">
+            <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
+            <span>罰寫訂正卷 (抄3次)</span>
           </button>
         </div>
 
         <!-- 公版雲端題庫捷徑 -->
-        <button onclick="openPublicCloudModal()" class="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-medium rounded-lg shadow-sm transition" title="前往公版 Google 試算表/表單下載整理好的題庫">
+        <button onclick="openPublicCloudModal()" class="inline-flex items-center gap-1.5 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-medium rounded-lg shadow-sm transition" title="前往公版 Google 試算表下載整理好的題庫">
           <i data-lucide="sheet" class="w-4 h-4"></i>
           <span class="hidden sm:inline">公版題庫雲端</span>
         </button>
 
+        <!-- 列印與匯出中心 -->
         <button onclick="openExportModal()" class="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs sm:text-sm font-medium rounded-lg shadow-sm transition">
           <i data-lucide="printer" class="w-4 h-4"></i>
           <span>列印 / 匯出考卷</span>
@@ -160,7 +170,7 @@
 
   <main class="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
     
-    <!-- 左側面板：匯入題庫、篩選、點選字詞設定考點 (佔 5 欄) -->
+    <!-- 左側面板：匯入題庫、篩選、點選字詞設定考點 (5 欄) -->
     <div class="no-print lg:col-span-5 space-y-4">
       
       <!-- 1. 題庫匯入區 (Excel/剪貼簿) -->
@@ -185,7 +195,7 @@
           </div>
         </div>
 
-        <!-- 公版雲端題庫醒目橫幅提示 -->
+        <!-- 公版雲端題庫提示橫幅 -->
         <div class="mt-2.5 p-2 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl flex items-center justify-between">
           <div class="flex items-center gap-2">
             <div class="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
@@ -201,11 +211,16 @@
           </button>
         </div>
 
-        <!-- 快捷操作與貼上按鈕 -->
+        <!-- 快捷操作按鈕 -->
         <div class="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-100">
-          <button onclick="openPasteModal()" class="text-xs font-medium text-slate-700 hover:text-indigo-600 inline-flex items-center gap-1">
-            <i data-lucide="clipboard" class="w-3.5 h-3.5"></i>直接貼上試題文字
-          </button>
+          <div class="flex items-center gap-2">
+            <button onclick="openManualAddModal()" class="text-xs font-semibold text-indigo-600 hover:text-indigo-800 inline-flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded-md transition">
+              <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>手動新增題目
+            </button>
+            <button onclick="openPasteModal()" class="text-xs font-medium text-slate-700 hover:text-indigo-600 inline-flex items-center gap-1">
+              <i data-lucide="clipboard" class="w-3.5 h-3.5"></i>貼上試題文字
+            </button>
+          </div>
           <button onclick="loadDefaultSampleData()" class="text-xs font-medium text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 px-2.5 py-1 rounded-md transition">
             重載多版本示範題庫
           </button>
@@ -224,23 +239,19 @@
           </button>
         </div>
 
-        <!-- 篩選器三合一 (版本、課次、搜尋) -->
         <div class="grid grid-cols-2 gap-2 text-xs">
           <div>
             <label class="block text-slate-500 mb-1 font-medium">教科書版本</label>
             <select id="filter-version" onchange="onVersionChange()" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 font-medium">
-              <!-- 動態生成版本 -->
             </select>
           </div>
           <div>
             <label class="block text-slate-500 mb-1 font-medium">課次 / 單元</label>
             <select id="filter-lesson" onchange="onFilterChange()" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 font-medium">
-              <!-- 動態生成課次 -->
             </select>
           </div>
         </div>
 
-        <!-- 詞彙即時關鍵字搜尋框 -->
         <div class="relative">
           <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none"></i>
           <input type="text" id="search-keyword" oninput="onFilterChange()" placeholder="快速查詢詞彙、字或注釋關鍵字 (如: 疵、豁然...)" class="w-full pl-9 pr-8 py-1.5 text-xs bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-indigo-500">
@@ -266,7 +277,6 @@
 
         <!-- 題型切換 Tab -->
         <div id="type-tabs" class="flex gap-1 border-b border-slate-200 pb-2 mb-2 overflow-x-auto text-xs font-medium">
-          <!-- 動態生成 Tab (例如：全部、國字注音、注釋) -->
         </div>
 
         <!-- 批次選題工具列 -->
@@ -278,7 +288,6 @@
             </label>
             <button onclick="clearCurrentSelection()" class="text-[11px] text-slate-500 hover:text-rose-600">清空已選</button>
           </div>
-          <!-- 隨機抽題 -->
           <div class="flex items-center gap-1">
             <input type="number" id="random-count-input" value="5" min="1" max="50" class="w-10 h-6 text-xs text-center border border-slate-300 rounded px-0.5">
             <button onclick="randomPickCurrentFiltered()" class="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded text-[11px] font-medium transition">
@@ -287,15 +296,12 @@
           </div>
         </div>
 
-        <!-- 操作小提示 -->
         <div class="text-[11px] text-slate-500 mb-2 flex items-center gap-1 bg-amber-50/70 border border-amber-200/60 px-2 py-1 rounded-md">
           <i data-lucide="info" class="w-3.5 h-3.5 text-amber-600 shrink-0"></i>
           <span>點選詞彙中的<b>每個字</b>可即時指定考「國字」或「注音」！</span>
         </div>
 
-        <!-- 題目清單 (滾動區域) -->
         <div id="question-list-container" class="flex-1 overflow-y-auto space-y-2 pr-1">
-          <!-- 動態載入題目清單 -->
         </div>
       </div>
 
@@ -335,27 +341,27 @@
         <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-xs text-slate-600">
           <label class="inline-flex items-center gap-1.5 cursor-pointer">
             <input type="checkbox" id="cfg-double-column" checked onchange="renderExamPaper()" class="rounded text-indigo-600">
-            <span>國字注音採雙欄排版 (節省紙張)</span>
+            <span>國字注音採雙欄排版</span>
           </label>
           <div class="flex items-center gap-3">
-            <label class="inline-flex items-center gap-1 cursor-pointer" title="將簡短題目成對並排在前，長題與多空格題自動挪到最後整行排列">
+            <label class="inline-flex items-center gap-1 cursor-pointer" title="將簡短題目並排在前，長題自動挪到最後整行排列">
               <input type="checkbox" id="cfg-auto-sort-length" checked onchange="renderExamPaper()" class="rounded text-indigo-600">
-              <span class="text-indigo-700 font-medium">長題置底優化</span>
+              <span class="text-indigo-700 font-medium">長題置底</span>
             </label>
             <label class="inline-flex items-center gap-1 cursor-pointer">
               <input type="checkbox" id="cfg-show-box" checked onchange="renderExamPaper()" class="rounded text-indigo-600">
-              <span>一字一格 (方格)</span>
+              <span>方格</span>
             </label>
-            <label class="inline-flex items-center gap-1 cursor-pointer" title="在方格內顯示淡十字虛線">
+            <label class="inline-flex items-center gap-1 cursor-pointer" title="在方格內顯示十字虛線">
               <input type="checkbox" id="cfg-tian-grid" onchange="renderExamPaper()" class="rounded text-indigo-600">
-              <span>田字虛線</span>
+              <span>田字格</span>
             </label>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 右側面板：A4 考卷實時預覽區 (佔 7 欄) -->
+    <!-- 右側面板：A4 考卷實時預覽區 (7 欄) -->
     <div class="lg:col-span-7 flex flex-col items-center">
       
       <!-- 頂端即時資訊提示 -->
@@ -377,20 +383,19 @@
         <div id="paper-element" class="a4-page exam-paper-font text-slate-900 border border-slate-200/80">
           
           <!-- 考卷大標題與抬頭 -->
-          <div class="text-center pb-2 border-b-2 border-slate-900">
+          <div id="paper-header-container" class="text-center pb-2 border-b-2 border-slate-900">
             <h1 id="paper-school-display" class="text-xl font-bold tracking-wider mb-1">市立示範國民中學</h1>
             <h2 id="paper-title-display" class="text-2xl font-black tracking-widest mb-3">國文科 第一課 隨堂小卷</h2>
             
-            <!-- 學生填寫資料欄位 -->
+            <!-- 學生填寫資料欄位與評分/檢查框 -->
             <div class="flex justify-between items-center text-sm font-semibold pt-1 px-1">
               <div class="flex gap-4">
                 <span>年級班級：＿＿年＿＿班</span>
                 <span>座號：＿＿</span>
                 <span>姓名：＿＿＿＿＿＿</span>
               </div>
-              <!-- 得分框 (加大尺寸，方便老師與小老師紅筆批改打分數) -->
               <div class="border-2 border-slate-900 rounded flex overflow-hidden self-end mb-0.5 shadow-2xs">
-                <div class="bg-slate-100 border-r-2 border-slate-900 px-3 py-2 flex items-center justify-center font-bold tracking-widest text-slate-800 text-sm select-none">
+                <div id="paper-score-label" class="bg-slate-100 border-r-2 border-slate-900 px-3 py-2 flex items-center justify-center font-bold tracking-widest text-slate-800 text-sm select-none">
                   得分
                 </div>
                 <div class="w-20 sm:w-24 h-11 flex items-center justify-center relative bg-white">
@@ -400,13 +405,12 @@
             </div>
           </div>
 
-          <!-- 試卷內容本體 (動態生成各大題) -->
+          <!-- 試卷內容本體 -->
           <div id="paper-body" class="pt-4 space-y-6">
-            <!-- 內容動態插入 -->
           </div>
 
           <!-- 頁尾提醒 -->
-          <div class="mt-8 pt-3 border-t border-slate-400 text-center text-xs text-slate-500">
+          <div id="paper-footer-container" class="mt-8 pt-3 border-t border-slate-400 text-center text-xs text-slate-500">
             ※ 請以原子筆工整書寫，字跡潦草以致無法辨識者不予計分 ※
           </div>
         </div>
@@ -427,7 +431,6 @@
         </button>
       </div>
 
-      <!-- 當前選取的字展示 -->
       <div class="text-center py-2 bg-slate-50 rounded-xl border border-slate-100">
         <div class="text-xs text-slate-400 mb-1">正在設定字元</div>
         <div id="modal-char-display" class="text-4xl font-black text-slate-800 exam-paper-font">
@@ -438,38 +441,30 @@
         </div>
       </div>
 
-      <!-- 選擇出題模式 -->
       <div class="space-y-2 text-xs">
         <label class="block font-bold text-slate-700">測驗模式：</label>
         <div class="grid grid-cols-3 gap-2">
           <button type="button" id="btn-mode-none" onclick="selectCharMode('none')" class="p-2.5 border-2 rounded-xl text-center transition flex flex-col items-center justify-center cursor-pointer">
-            <div class="font-bold text-xs flex items-center gap-1">
-              <span class="mode-icon"></span>不測驗
-            </div>
+            <div class="font-bold text-xs flex items-center gap-1">不測驗</div>
             <div class="text-[10px] mt-0.5 opacity-80">保留一般字</div>
           </button>
           <button type="button" id="btn-mode-zhuyin" onclick="selectCharMode('zhuyin')" class="p-2.5 border-2 rounded-xl text-center transition flex flex-col items-center justify-center cursor-pointer">
-            <div class="font-bold text-xs flex items-center gap-1">
-              <span class="mode-icon"></span>考注音
-            </div>
+            <div class="font-bold text-xs flex items-center gap-1">考注音</div>
             <div class="text-[10px] mt-0.5 opacity-80">題給字・答注音</div>
           </button>
           <button type="button" id="btn-mode-char" onclick="selectCharMode('char')" class="p-2.5 border-2 rounded-xl text-center transition flex flex-col items-center justify-center cursor-pointer">
-            <div class="font-bold text-xs flex items-center gap-1">
-              <span class="mode-icon"></span>考國字
-            </div>
+            <div class="font-bold text-xs flex items-center gap-1">考國字</div>
             <div class="text-[10px] mt-0.5 opacity-80">題給音・答國字</div>
           </button>
         </div>
 
-        <!-- 模式即時效果動態說明框 -->
         <div id="modal-mode-hint" class="mt-1 p-2 rounded-lg bg-slate-50 border border-slate-200 text-[11px] text-slate-600 flex items-center gap-1.5">
           <i data-lucide="help-circle" class="w-3.5 h-3.5 text-indigo-500 shrink-0"></i>
           <span id="modal-mode-hint-text">請選擇此字的出題方式</span>
         </div>
       </div>
 
-      <!-- 注音輸入與確認 -->
+      <!-- 注音輸入與多音字快捷列 -->
       <div id="modal-zhuyin-group" class="space-y-1.5 text-xs">
         <div class="flex items-center justify-between">
           <label class="block font-bold text-slate-700">此字注音：</label>
@@ -480,7 +475,6 @@
         <div class="flex items-center gap-2">
           <input type="text" id="modal-zhuyin-input" placeholder="例如: ㄘ、ㄓˊ" class="flex-1 border border-slate-300 rounded-lg px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500">
         </div>
-        <!-- 聲調快捷點選 -->
         <div class="flex items-center gap-1.5 pt-1 text-slate-600">
           <span class="text-[11px] text-slate-400">聲調快填：</span>
           <button type="button" onclick="appendTone('')" class="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded text-xs">一聲</button>
@@ -514,11 +508,11 @@
         可在 Excel 中選取試題欄位後按 Ctrl+C，直接貼在下方（欄位：版本、課次、題型、詞彙、注釋答案）：
       </p>
       <textarea id="paste-textarea" rows="8" class="w-full font-mono text-xs p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none" placeholder="版本	課次	題型	詞彙	注釋答案
-康軒	第一課	國字注音	吹毛求疵	
-康軒	第一課	國字注音	提綱挈領	
-康軒	第一課	國字注音	落英繽紛	
-翰林	第二課	注釋	躊躇	猶豫不決、遲疑不進的樣子。
-南一	第一課	注釋	豁然開朗	形容開闊明亮，亦指突然悟出道理。"></textarea>
+康軒	第一課 夏夜	國字注音	吹毛求疵	
+康軒	第一課 夏夜	國字注音	提綱挈領	
+康軒	第一課 夏夜	注釋	豁然開朗	形容開闊明亮，亦指突然悟出道理。
+翰林	第一課 兒時記趣	國字注音	璀璨奪目	
+南一	第二課 背影	注釋	躊躇	猶豫不決、遲疑不進的樣子。"></textarea>
       
       <div class="flex items-center justify-end gap-2 pt-2">
         <button onclick="closePasteModal()" class="px-4 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100">取消</button>
@@ -527,7 +521,103 @@
     </div>
   </div>
 
-  <!-- 彈窗：公版 Google 表單 / 試算表題庫雲端 -->
+  <!-- 彈窗：手動新增試題 -->
+  <div id="manual-add-modal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-indigo-100 text-indigo-600 flex items-center justify-center">
+            <i data-lucide="plus-circle" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900">手動新增試題</h3>
+            <p class="text-xs text-slate-500">自訂生字詞彙或注釋試題</p>
+          </div>
+        </div>
+        <button onclick="closeManualAddModal()" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">教科書版本</label>
+            <input type="text" id="manual-version" list="manual-version-list" placeholder="如: 康軒、翰林" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 font-medium">
+            <datalist id="manual-version-list">
+              <option value="康軒">
+              <option value="翰林">
+              <option value="南一">
+              <option value="自訂">
+            </datalist>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">課次 / 單元</label>
+            <input type="text" id="manual-lesson" placeholder="如: 第一課 夏夜" class="w-full border border-slate-300 rounded-lg p-2 focus:ring-1 focus:ring-indigo-500 font-medium">
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">出題題型</label>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="flex items-center gap-2 p-2 border rounded-xl cursor-pointer hover:bg-slate-50 transition border-indigo-200 bg-indigo-50/30">
+              <input type="radio" name="manual-type" value="國字注音" checked onchange="onManualTypeChange('國字注音')" class="text-indigo-600">
+              <div>
+                <span class="font-bold text-slate-800">國字注音</span>
+                <p class="text-[10px] text-slate-400">自動抓取注音並可點字指定考點</p>
+              </div>
+            </label>
+            <label class="flex items-center gap-2 p-2 border rounded-xl cursor-pointer hover:bg-slate-50 transition border-slate-200">
+              <input type="radio" name="manual-type" value="注釋" onchange="onManualTypeChange('注釋')" class="text-indigo-600">
+              <div>
+                <span class="font-bold text-slate-800">注釋</span>
+                <p class="text-[10px] text-slate-400">詞彙出題，附帶釋義解答橫線</p>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <label class="block font-bold text-slate-700 mb-1">
+            <span id="manual-word-label">詞彙 / 題目</span>
+            <span class="text-rose-500">*</span>
+          </label>
+          <input type="text" id="manual-word" placeholder="例如: 吹毛求疵、絡繹不絕" class="w-full border border-slate-300 rounded-lg p-2 text-sm focus:ring-1 focus:ring-indigo-500 font-medium">
+        </div>
+
+        <div id="manual-def-group" class="hidden">
+          <label class="block font-bold text-slate-700 mb-1">
+            注釋釋義 / 答案
+            <span class="text-rose-500">*</span>
+          </label>
+          <textarea id="manual-definition" rows="3" placeholder="請輸入本詞彙的完整注釋釋義..." class="w-full border border-slate-300 rounded-lg p-2 text-xs focus:ring-1 focus:ring-indigo-500"></textarea>
+        </div>
+
+        <div class="pt-1">
+          <label class="inline-flex items-center gap-1.5 cursor-pointer text-slate-700">
+            <input type="checkbox" id="manual-auto-select" checked class="rounded text-indigo-600 focus:ring-0">
+            <span>新增後直接勾選加入目前試卷</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between pt-3 border-t">
+        <button onclick="closeManualAddModal()" class="px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100">
+          取消
+        </button>
+        <div class="flex items-center gap-2">
+          <button onclick="saveManualQuestion(true)" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition">
+            儲存並繼續新增
+          </button>
+          <button onclick="saveManualQuestion(false)" class="px-4 py-1.5 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition">
+            確認新增
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 彈窗：公版 Google 試算表題庫雲端 -->
   <div id="cloud-modal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4">
     <div class="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-4">
       <div class="flex items-center justify-between border-b pb-3">
@@ -545,7 +635,6 @@
         </button>
       </div>
 
-      <!-- 公版連結與開啟按鈕 -->
       <div class="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
         <div class="space-y-0.5 text-left w-full">
           <span class="text-xs font-bold text-emerald-950 flex items-center gap-1.5">
@@ -563,13 +652,11 @@
         </div>
       </div>
 
-      <!-- 下載與匯入操作教學 -->
       <div class="space-y-2.5 text-xs text-slate-600">
         <div class="font-bold text-slate-800 flex items-center gap-1.5">
           <i data-lucide="help-circle" class="w-4 h-4 text-indigo-600"></i>
-          老師如何快速匯入公版題庫？（兩種簡單方法）：
+          老師如何快速匯入公版題庫？
         </div>
-        
         <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
           <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
             <div class="font-bold text-slate-800 text-xs text-indigo-700">方法一：下載為 Excel / CSV（推薦）</div>
@@ -579,7 +666,6 @@
               <li>將下載後的檔案直接拖曳進本系統「步驟一」上傳區即可！</li>
             </ol>
           </div>
-
           <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
             <div class="font-bold text-slate-800 text-xs text-indigo-700">方法二：直接複製表格貼上</div>
             <ol class="list-decimal list-inside space-y-1 text-[11px] text-slate-600">
@@ -612,7 +698,6 @@
           <i data-lucide="x" class="w-5 h-5"></i>
         </button>
       </div>
-      
       <div class="text-xs text-slate-600 space-y-3">
         <p>系統支援版本與課次管理，表格第一列請設定欄位名稱：</p>
         <div class="overflow-x-auto border border-slate-200 rounded-lg">
@@ -629,33 +714,22 @@
             <tbody class="divide-y divide-slate-100 font-mono text-[11px]">
               <tr>
                 <td class="p-2 border-r text-indigo-600 font-bold">康軒</td>
-                <td class="p-2 border-r">第一課</td>
+                <td class="p-2 border-r">第一課 夏夜</td>
                 <td class="p-2 border-r">國字注音</td>
                 <td class="p-2 border-r font-bold text-slate-800">吹毛求疵</td>
                 <td class="p-2 text-slate-400 italic">（免填，系統自動抓注音）</td>
               </tr>
               <tr>
-                <td class="p-2 border-r text-indigo-600 font-bold">康軒</td>
-                <td class="p-2 border-r">第一課</td>
-                <td class="p-2 border-r">國字注音</td>
-                <td class="p-2 border-r font-bold text-slate-800">提綱挈領</td>
-                <td class="p-2 text-slate-400 italic">（免填，點選即設定考點）</td>
-              </tr>
-              <tr>
                 <td class="p-2 border-r text-amber-600 font-bold">翰林</td>
-                <td class="p-2 border-r">第二課</td>
+                <td class="p-2 border-r">第一課 兒時記趣</td>
                 <td class="p-2 border-r">注釋</td>
-                <td class="p-2 border-r font-bold text-slate-800">躊躇</td>
-                <td class="p-2 text-emerald-600">猶豫不決、遲疑不進的樣子。</td>
+                <td class="p-2 border-r font-bold text-slate-800">世外桃源</td>
+                <td class="p-2 text-emerald-600">比喻環境幽靜美好、遠離俗世喧擾的理想境界。</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <p class="text-[11px] text-slate-500">
-          💡 國字注音<b>不需要花時間打答案</b>，匯入後點選字詞上的字，系統會<b>自動偵測注音</b>，您只要點選「考注音」或「考國字」，亦可自由調整注音！
-        </p>
       </div>
-
       <div class="flex items-center justify-between pt-2">
         <button onclick="downloadSampleExcel()" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 flex items-center gap-1.5">
           <i data-lucide="download" class="w-4 h-4"></i>下載示範 CSV 範本
@@ -675,7 +749,7 @@
           </div>
           <div>
             <h3 class="text-base font-bold text-slate-900">考卷列印與匯出中心</h3>
-            <p class="text-xs text-slate-500">提供多種輸出方式，100% 解決瀏覽器無法列印問題</p>
+            <p class="text-xs text-slate-500">支援學生卷、解答卷與罰寫訂正卷輸出</p>
           </div>
         </div>
         <button onclick="closeExportModal()" class="text-slate-400 hover:text-slate-600">
@@ -683,32 +757,34 @@
         </button>
       </div>
 
-      <!-- 選擇匯出內容 -->
       <div class="space-y-2 text-xs">
         <label class="block font-bold text-slate-700">1. 請選擇要輸出的試卷內容：</label>
-        <div class="grid grid-cols-3 gap-2">
-          <label class="flex flex-col items-center justify-center p-2.5 border rounded-xl cursor-pointer hover:bg-slate-50 text-center transition">
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          <label class="flex flex-col items-center justify-center p-2 border rounded-xl cursor-pointer hover:bg-slate-50 text-center transition">
             <input type="radio" name="export-target-mode" value="student" checked class="mb-1 text-indigo-600">
             <span class="font-bold text-slate-800">學生測驗卷</span>
             <span class="text-[10px] text-slate-400 mt-0.5">留空作答</span>
           </label>
-          <label class="flex flex-col items-center justify-center p-2.5 border rounded-xl cursor-pointer hover:bg-slate-50 text-center transition">
+          <label class="flex flex-col items-center justify-center p-2 border rounded-xl cursor-pointer hover:bg-slate-50 text-center transition">
             <input type="radio" name="export-target-mode" value="teacher" class="mb-1 text-indigo-600">
             <span class="font-bold text-rose-600">教師解答卷</span>
             <span class="text-[10px] text-slate-400 mt-0.5">紅字詳解</span>
           </label>
-          <label class="flex flex-col items-center justify-center p-2.5 border rounded-xl cursor-pointer hover:bg-slate-50 text-center transition">
+          <label class="flex flex-col items-center justify-center p-2 border rounded-xl cursor-pointer hover:bg-slate-50 text-center transition">
+            <input type="radio" name="export-target-mode" value="punish" class="mb-1 text-amber-600">
+            <span class="font-bold text-amber-700">罰寫訂正卷</span>
+            <span class="text-[10px] text-slate-400 mt-0.5">抄寫三次</span>
+          </label>
+          <label class="flex flex-col items-center justify-center p-2 border rounded-xl cursor-pointer hover:bg-slate-50 text-center transition">
             <input type="radio" name="export-target-mode" value="both" class="mb-1 text-indigo-600">
-            <span class="font-bold text-indigo-700">兩卷合一</span>
+            <span class="font-bold text-indigo-700">雙卷合一</span>
             <span class="text-[10px] text-slate-400 mt-0.5">題卷+解答</span>
           </label>
         </div>
       </div>
 
-      <!-- 輸出選項 -->
       <div class="space-y-2 text-xs pt-2">
         <label class="block font-bold text-slate-700">2. 請點選匯出方式：</label>
-        
         <button onclick="triggerExportWord()" class="w-full flex items-center justify-between p-3 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-xl transition text-left group">
           <div class="flex items-center gap-2.5">
             <div class="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center shrink-0">
@@ -732,7 +808,7 @@
             </div>
             <div>
               <div class="font-bold text-slate-800">在獨立新分頁開啟並列印</div>
-              <div class="text-[11px] text-slate-500">跳脫預覽限制，開啟全螢幕並叫出列印視窗</div>
+              <div class="text-[11px] text-slate-500">跳脫預覽限制，全螢幕叫出列印視窗</div>
             </div>
           </div>
           <i data-lucide="arrow-up-right" class="w-4 h-4 text-slate-400"></i>
@@ -745,7 +821,7 @@
             </div>
             <div>
               <div class="font-bold text-slate-800">下載離線網頁檔 (.html)</div>
-              <div class="text-[11px] text-slate-500">離線保存，雙擊即可在瀏覽器列印</div>
+              <div class="text-[11px] text-slate-500">離線保存，雙擊即可在瀏覽器開啟列印</div>
             </div>
           </div>
           <i data-lucide="download" class="w-4 h-4 text-slate-400"></i>
@@ -767,30 +843,93 @@
     </div>
   </div>
 
+  <!-- 彈窗：Excel 工作表選取與匯入設定 -->
+  <div id="sheet-select-modal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b pb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center">
+            <i data-lucide="layers" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-900">選擇匯入的工作表</h3>
+            <p id="sheet-modal-filename" class="text-xs text-slate-500 truncate max-w-[240px]">檔案：</p>
+          </div>
+        </div>
+        <button onclick="closeSheetSelectModal()" class="text-slate-400 hover:text-slate-600">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <div class="space-y-2">
+        <label class="block text-xs font-bold text-slate-700">1. 請選擇要匯入的工作表 (Sheet)：</label>
+        <div id="sheet-list-container" class="max-h-48 overflow-y-auto space-y-1.5 pr-1 text-xs">
+          <!-- 工作表清單動態注入 -->
+        </div>
+      </div>
+
+      <div class="space-y-2 pt-2 border-t text-xs">
+        <label class="block font-bold text-slate-700">2. 匯入方式：</label>
+        <div class="grid grid-cols-2 gap-2">
+          <label class="flex items-center gap-2 p-2.5 border rounded-xl cursor-pointer hover:bg-slate-50 transition">
+            <input type="radio" name="import-mode" value="append" checked class="text-indigo-600">
+            <div>
+              <div class="font-bold text-slate-800">加入現有題庫</div>
+              <div class="text-[10px] text-slate-400">保留原本題目並追加</div>
+            </div>
+          </label>
+          <label class="flex items-center gap-2 p-2.5 border rounded-xl cursor-pointer hover:bg-slate-50 transition">
+            <input type="radio" name="import-mode" value="replace" class="text-indigo-600">
+            <div>
+              <div class="font-bold text-slate-800">清空並替換</div>
+              <div class="text-[10px] text-slate-400">移除舊題，重新載入</div>
+            </div>
+          </label>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t">
+        <button onclick="closeSheetSelectModal()" class="px-4 py-2 rounded-lg text-xs font-medium text-slate-600 hover:bg-slate-100">取消</button>
+        <button onclick="confirmSheetImport()" class="px-4 py-2 rounded-lg text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700">確認匯入</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 提示訊息 Toast 容器 -->
   <div id="toast" class="fixed bottom-5 right-5 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none bg-slate-900 text-white text-xs px-4 py-2.5 rounded-xl shadow-xl flex items-center gap-2">
     <span id="toast-message">提示訊息</span>
   </div>
 
   <script>
+    // 安全呼叫 Lucide 圖示生成函式
+    function safeCreateIcons() {
+      if (typeof lucide !== 'undefined' && lucide && typeof lucide.createIcons === 'function') {
+        try {
+          lucide.createIcons();
+        } catch (e) {
+          console.warn('Lucide icons rendering skipped:', e);
+        }
+      }
+    }
+
     // 試題資料庫全域狀態
     let questionBank = [];
     let selectedQuestionIds = new Set();
-    let currentActiveTab = 'all'; // 'all' | '國字注音' | '注釋' 等
-    let currentPaperMode = 'student'; // 'student' 學生卷 | 'teacher' 解答卷
+    let currentActiveTab = 'all'; 
+    let currentPaperMode = 'student'; // 'student' | 'teacher' | 'punish'
+    let pendingWorkbook = null;
+    let pendingFileName = '';
 
-    // 正在編輯的字元狀態
     let editingCharContext = {
       questionId: null,
       charIndex: null,
       char: '',
-      mode: 'none', // 'none' | 'zhuyin' | 'char'
+      mode: 'none',
       zhuyin: ''
     };
 
-    // 常用課文常見字中學繁體中文注音詞庫（自動偵測用）
+    // 常用課文繁體注音詞庫
     const COMMON_ZHUYIN_DICT = {
-      // 課文生字難字
       '疵': 'ㄘ', '綱': 'ㄍㄤ', '挈': 'ㄑㄧㄝˋ', '蟄': 'ㄓˊ', '璀': 'ㄘㄨㄟˇ', '璨': 'ㄘㄢˋ',
       '絀': 'ㄔㄨˋ', '鰥': 'ㄍㄨㄢ', '悚': 'ㄙㄨㄥˇ', '杳': 'ㄧㄠˇ', '衍': 'ㄧㄢˇ', '躊': 'ㄔㄡˊ',
       '躇': 'ㄔㄨˊ', '豁': 'ㄏㄨㄛˋ', '朗': 'ㄌㄤˇ', '源': 'ㄩㄢˊ', '甚': 'ㄕㄣˋ', '繽': 'ㄅㄧㄣ',
@@ -806,98 +945,42 @@
       '嫵': 'ㄨˇ', '媚': 'ㄇㄟˋ', '漣': 'ㄌㄧㄢˊ', '漪': 'ㄧ', '踱': 'ㄉㄨㄛˋ', '蹣': 'ㄇㄢˊ',
       '跚': 'ㄕㄢ', '橘': 'ㄐㄩˊ', '囑': 'ㄓㄨˇ', '箸': 'ㄓㄨˋ', '惦': 'ㄉㄧㄢˋ',
       '膀': 'ㄅㄤˇ', '妥': 'ㄊㄨㄛˇ', '帖': 'ㄊㄧㄝ', '剔': 'ㄊㄧ', '透': 'ㄊㄡˋ', '攀': 'ㄆㄢ',
-      // 成語與高頻考點字
       '吹': 'ㄔㄨㄟ', '毛': 'ㄇㄠˊ', '求': 'ㄑㄧㄡˊ', '提': 'ㄊㄧˊ', '領': 'ㄌㄧㄥˇ',
       '世': 'ㄕˋ', '外': 'ㄨㄞˋ', '桃': 'ㄊㄠˊ', '敷': 'ㄈㄨ', '了': 'ㄌㄧㄠˇ', '事': 'ㄕˋ',
       '相': 'ㄒㄧㄤ', '形': 'ㄒㄧㄥˊ', '見': 'ㄐㄧㄢˋ', '開': 'ㄎㄞ', '夏': 'ㄒㄧㄚˋ', '夜': 'ㄧㄝˋ',
-      '背': 'ㄅㄟˋ', '影': 'ㄧㄥˇ', '兒': 'ㄦˊ', '時': 'ㄕˊ', '記': 'ㄐㄧˋ', '趣': 'ㄑㄩˋ',
+      '背': 'ㄅㄟˋ', '影': 'ㄧㄥˇ', '兒': 'ㄦˊ', '時': 'ㄕˊ', '記': 'ㄐㄧˋ', '趣': 'ㄑㄑˋ',
       '載': 'ㄗㄞˋ', '興': 'ㄒㄧㄥ', '覆': 'ㄈㄨˋ', '履': 'ㄌㄩˇ', '薄': 'ㄅㄠˊ', '冰': 'ㄅㄧㄥ'
     };
 
-    // 常見多音字／破音字資料庫（支援不同課次讀音快速切換）
+    // 多音字切換資料庫
     const POLYPHONE_DICT = {
-      '背': [
-        { py: 'ㄅㄟˋ', desc: '名詞/背部、背影' },
-        { py: 'ㄅㄟ', desc: '動詞/背負、背包' }
-      ],
-      '數': [
-        { py: 'ㄕㄨˋ', desc: '數目、數量、不計其數' },
-        { py: 'ㄕㄨˇ', desc: '計算、數一數' },
-        { py: 'ㄕㄨㄛˋ', desc: '屢次、數見不鮮' }
-      ],
-      '行': [
-        { py: 'ㄒㄧㄥˊ', desc: '行動、行走、品行' },
-        { py: 'ㄏㄤˊ', desc: '行業、銀行、排成一行' }
-      ],
-      '差': [
-        { py: 'ㄔㄚ', desc: '差異、差錯、相差' },
-        { py: 'ㄔㄞ', desc: '差使、出差、聽差' },
-        { py: 'ㄔㄚˋ', desc: '差勁、差不多' },
-        { py: 'ㄘ', desc: '參差不齊' }
-      ],
-      '了': [
-        { py: 'ㄌㄧㄠˇ', desc: '明瞭、敷衍了事、受不了' },
-        { py: '˙ㄌㄜ', desc: '助詞/走了、來了' }
-      ],
-      '強': [
-        { py: 'ㄑㄧㄤˊ', desc: '強大、堅強、強項' },
-        { py: 'ㄑㄧㄤˇ', desc: '勉強、強詞奪理' },
-        { py: 'ㄐㄧㄤˋ', desc: '強脾氣、倔強' }
-      ],
-      '落': [
-        { py: 'ㄌㄨㄛˋ', desc: '落花、落下、落落大方' },
-        { py: 'ㄌㄠˋ', desc: '落枕、落色' },
-        { py: 'ㄌㄚˋ', desc: '丟三落四、落下' }
-      ],
-      '相': [
-        { py: 'ㄒㄧㄤ', desc: '互相、相形見絀' },
-        { py: 'ㄒㄧㄤˋ', desc: '相貌、宰相、看相' }
-      ],
-      '興': [
-        { py: 'ㄒㄧㄥ', desc: '興盛、興辦、載歌載舞' },
-        { py: 'ㄒㄧㄥˋ', desc: '興趣、高興、掃興' }
-      ],
-      '便': [
-        { py: 'ㄅㄧㄢˋ', desc: '方便、便利、即刻' },
-        { py: 'ㄆㄧㄢˊ', desc: '大腹便便、便宜' }
-      ],
-      '重': [
-        { py: 'ㄓㄨㄥˋ', desc: '重量、重要、輕重' },
-        { py: 'ㄔㄨㄥˊ', desc: '重新、重複、重疊' }
-      ],
-      '調': [
-        { py: 'ㄉㄧㄠˋ', desc: '調動、聲調、腔調' },
-        { py: 'ㄊㄧㄠˊ', desc: '調整、調和、調味' }
-      ]
+      '背': [{ py: 'ㄅㄟˋ', desc: '名詞/背部、背影' }, { py: 'ㄅㄟ', desc: '動詞/背負、背包' }],
+      '數': [{ py: 'ㄕㄨˋ', desc: '數量、不計其數' }, { py: 'ㄕㄨˇ', desc: '計算、數一數' }, { py: 'ㄕㄨㄛˋ', desc: '屢次、數見不鮮' }],
+      '行': [{ py: 'ㄒㄧㄥˊ', desc: '行動、品行' }, { py: 'ㄏㄤˊ', desc: '行業、銀行' }],
+      '差': [{ py: 'ㄔㄚ', desc: '差異、差錯' }, { py: 'ㄔㄞ', desc: '差使、出差' }, { py: 'ㄔㄚˋ', desc: '差勁、差不多' }, { py: 'ㄘ', desc: '參差不齊' }],
+      '了': [{ py: 'ㄌㄧㄠˇ', desc: '明瞭、敷衍了事' }, { py: '˙ㄌㄜ', desc: '助詞/走了、來了' }],
+      '強': [{ py: 'ㄑㄧㄤˊ', desc: '強大、堅強' }, { py: 'ㄑㄧㄤˇ', desc: '勉強、牽強' }, { py: 'ㄐㄧㄤˋ', desc: '倔強' }],
+      '落': [{ py: 'ㄌㄨㄛˋ', desc: '落花、落下' }, { py: 'ㄌㄠˋ', desc: '落枕' }, { py: 'ㄌㄚˋ', desc: '丟三落四' }],
+      '相': [{ py: 'ㄒㄧㄤ', desc: '互相、相形見絀' }, { py: 'ㄒㄧㄤˋ', desc: '相貌、宰相' }],
+      '興': [{ py: 'ㄒㄧㄥ', desc: '興盛、載歌載舞' }, { py: 'ㄒㄧㄥˋ', desc: '高興、興趣' }]
     };
 
-    // 自動偵測單字注音
     function autoDetectZhuyin(char) {
       if (!char) return '';
-      if (COMMON_ZHUYIN_DICT[char]) {
-        return COMMON_ZHUYIN_DICT[char];
-      }
-      return '';
+      return COMMON_ZHUYIN_DICT[char] || '';
     }
 
-    // 教科書標準「直式注音符號排版引擎」，解決注音在正方形格子內擠壓折成四宮格的問題
+    // 直式注音符號排版渲染引擎
     function renderAnswerBoxContent(ansText) {
       if (!ansText) return '';
-      
-      // 判斷是否為注音符號（含注音符號 Unicode 區間 \u3105-\u312F）
       const hasZhuyin = /[\u3105-\u312F]/.test(ansText);
-      
-      // 1. 若答案是國字：直接以大字號標楷體居中呈現
       if (!hasZhuyin) {
         return `<span class="text-rose-600 font-bold text-xl leading-none select-none z-10 relative">${ansText}</span>`;
       }
 
-      // 2. 若答案是注音：依照台灣教育部規範拆解為直式排版（主體直排＋右側調號）
       let tone = '';
       const cleanSymbols = [];
-      const chars = ansText.split('');
-
-      chars.forEach(ch => {
+      ansText.split('').forEach(ch => {
         if (['ˊ', 'ˇ', 'ˋ', '˙'].includes(ch)) {
           tone = ch;
         } else if (/[\u3105-\u312F]/.test(ch)) {
@@ -906,25 +989,15 @@
       });
 
       const count = cleanSymbols.length;
-      let symbolStyle = 'text-[14px] leading-[14px]';
-      if (count >= 3) {
-        symbolStyle = 'text-[11.5px] leading-[11px] tracking-tight';
-      } else if (count === 2) {
-        symbolStyle = 'text-[13.5px] leading-[13px]';
-      } else {
-        symbolStyle = 'text-[16px] leading-[16px]';
-      }
-
+      let symbolStyle = count >= 3 ? 'text-[11.5px] leading-[11px] tracking-tight' : (count === 2 ? 'text-[13.5px] leading-[13px]' : 'text-[16px] leading-[16px]');
       const isLightTone = tone === '˙';
 
       return `
         <div class="relative w-full h-full flex items-center justify-center select-none z-10">
-          <!-- 注音符號本體（由上往下直排，微偏左騰出右側調號空間） -->
           <div class="flex flex-col items-center justify-center font-bold text-rose-600 ${symbolStyle} ${(!isLightTone && tone) ? '-ml-2' : ''}">
             ${isLightTone ? '<span class="text-[9px] leading-none mb-0.5">˙</span>' : ''}
             ${cleanSymbols.map(s => `<span class="block">${s}</span>`).join('')}
           </div>
-          <!-- 聲調符號（二、三、四聲精確貼齊於韻母右側） -->
           ${(!isLightTone && tone) ? `
             <span class="absolute text-rose-600 font-bold text-xs leading-none select-none" style="right: 5px; top: ${count >= 3 ? '44%' : '36%'};">
               ${tone}
@@ -934,7 +1007,7 @@
       `;
     }
 
-    // 示範題庫：國字注音不需手動填寫答案，全由教師選字與自動偵測注音
+    // 示範預設題庫
     const SAMPLE_DATA = [
       {
         id: 'q_1',
@@ -994,24 +1067,6 @@
         id: 'q_5',
         version: '康軒',
         lesson: '第一課 夏夜',
-        type: '注釋',
-        word: '豁然開朗',
-        chars: [],
-        definition: '形容開闊明亮，亦指突然悟出道理。'
-      },
-      {
-        id: 'q_6',
-        version: '康軒',
-        lesson: '第一課 夏夜',
-        type: '注釋',
-        word: '落英繽紛',
-        chars: [],
-        definition: '落花繁多紛亂的樣子。英，指花。'
-      },
-      {
-        id: 'q_7',
-        version: '翰林',
-        lesson: '第一課 兒時記趣',
         type: '國字注音',
         word: '璀璨奪目',
         chars: [
@@ -1023,9 +1078,9 @@
         definition: ''
       },
       {
-        id: 'q_8',
-        version: '翰林',
-        lesson: '第一課 兒時記趣',
+        id: 'q_6',
+        version: '康軒',
+        lesson: '第一課 夏夜',
         type: '國字注音',
         word: '相形見絀',
         chars: [
@@ -1037,18 +1092,51 @@
         definition: ''
       },
       {
+        id: 'q_7',
+        version: '康軒',
+        lesson: '第一課 夏夜',
+        type: '國字注音',
+        word: '躊躇不前',
+        chars: [
+          { char: '躊', mode: 'none', zhuyin: 'ㄔㄡˊ' },
+          { char: '躇', mode: 'none', zhuyin: 'ㄔㄨˊ' },
+          { char: '不', mode: 'none', zhuyin: 'ㄅㄨˋ' },
+          { char: '前', mode: 'none', zhuyin: 'ㄑㄧㄢˊ' }
+        ],
+        definition: ''
+      },
+      {
+        id: 'q_8',
+        version: '康軒',
+        lesson: '第一課 夏夜',
+        type: '國字注音',
+        word: '毛骨悚然',
+        chars: [
+          { char: '毛', mode: 'none', zhuyin: 'ㄇㄠˊ' },
+          { char: '骨', mode: 'none', zhuyin: 'ㄍㄨˇ' },
+          { char: '悚', mode: 'none', zhuyin: 'ㄙㄨㄥˇ' },
+          { char: '然', mode: 'none', zhuyin: 'ㄖㄢˊ' }
+        ],
+        definition: ''
+      },
+      {
         id: 'q_9',
-        version: '翰林',
-        lesson: '第一課 兒時記趣',
-        type: '注釋',
-        word: '世外桃源',
-        chars: [],
-        definition: '比喻環境幽靜美好、遠離俗世喧擾的安樂理想境界。'
+        version: '康軒',
+        lesson: '第一課 夏夜',
+        type: '國字注音',
+        word: '杳無音信',
+        chars: [
+          { char: '杳', mode: 'none', zhuyin: 'ㄧㄠˇ' },
+          { char: '無', mode: 'none', zhuyin: 'ㄨˊ' },
+          { char: '音', mode: 'none', zhuyin: 'ㄧㄣ' },
+          { char: '信', mode: 'none', zhuyin: 'ㄒㄧㄣˋ' }
+        ],
+        definition: ''
       },
       {
         id: 'q_10',
-        version: '南一',
-        lesson: '第二課 背影',
+        version: '康軒',
+        lesson: '第一課 夏夜',
         type: '國字注音',
         word: '敷衍了事',
         chars: [
@@ -1061,29 +1149,119 @@
       },
       {
         id: 'q_11',
-        version: '南一',
-        lesson: '第二課 背影',
-        type: '注釋',
-        word: '躊躇',
-        chars: [],
-        definition: '猶豫不決、遲疑不進的樣子。'
+        version: '康軒',
+        lesson: '第一課 夏夜',
+        type: '國字注音',
+        word: '馳騁考場',
+        chars: [
+          { char: '馳', mode: 'none', zhuyin: 'ㄔˊ' },
+          { char: '騁', mode: 'none', zhuyin: 'ㄔㄥˇ' },
+          { char: '考', mode: 'none', zhuyin: 'ㄎㄠˇ' },
+          { char: '場', mode: 'none', zhuyin: 'ㄔㄤˊ' }
+        ],
+        definition: ''
       },
       {
         id: 'q_12',
-        version: '南一',
-        lesson: '第二課 背影',
+        version: '康軒',
+        lesson: '第一課 夏夜',
+        type: '國字注音',
+        word: '狹隘偏激',
+        chars: [
+          { char: '狹', mode: 'none', zhuyin: 'ㄒㄧㄚˊ' },
+          { char: '隘', mode: 'none', zhuyin: 'ㄞˋ' },
+          { char: '偏', mode: 'none', zhuyin: 'ㄆㄧㄢ' },
+          { char: '激', mode: 'none', zhuyin: 'ㄐㄧ' }
+        ],
+        definition: ''
+      },
+      {
+        id: 'q_13',
+        version: '康軒',
+        lesson: '第一課 夏夜',
+        type: '國字注音',
+        word: '涸轍之鮒',
+        chars: [
+          { char: '涸', mode: 'none', zhuyin: 'ㄏㄜˊ' },
+          { char: '轍', mode: 'none', zhuyin: 'ㄓㄜˊ' },
+          { char: '之', mode: 'none', zhuyin: 'ㄓ' },
+          { char: '鮒', mode: 'none', zhuyin: 'ㄈㄨˋ' }
+        ],
+        definition: ''
+      },
+      {
+        id: 'q_14',
+        version: '康軒',
+        lesson: '第一課 夏夜',
+        type: '國字注音',
+        word: '追本溯源',
+        chars: [
+          { char: '追', mode: 'none', zhuyin: 'ㄓㄨㄟ' },
+          { char: '本', mode: 'none', zhuyin: 'ㄅㄣˇ' },
+          { char: '溯', mode: 'none', zhuyin: 'ㄙㄨˋ' },
+          { char: '源', mode: 'none', zhuyin: 'ㄩㄢˊ' }
+        ],
+        definition: ''
+      },
+      {
+        id: 'q_15',
+        version: '康軒',
+        lesson: '第一課 夏夜',
+        type: '國字注音',
+        word: '韶華易逝',
+        chars: [
+          { char: '韶', mode: 'none', zhuyin: 'ㄕㄠˊ' },
+          { char: '華', mode: 'none', zhuyin: 'ㄏㄨㄚˊ' },
+          { char: '易', mode: 'none', zhuyin: 'ㄧˋ' },
+          { char: '逝', mode: 'none', zhuyin: 'ㄕˋ' }
+        ],
+        definition: ''
+      },
+      {
+        id: 'q_def_1',
+        version: '康軒',
+        lesson: '第一課 夏夜',
         type: '注釋',
-        word: '不求甚解',
+        word: '豁然開朗',
         chars: [],
-        definition: '指讀書只求領會大意，不咬文嚼字；亦指學習不求甚解。'
+        definition: '形容開闊明亮，亦指突然悟出道理。'
+      },
+      {
+        id: 'q_def_2',
+        version: '康軒',
+        lesson: '第一課 夏夜',
+        type: '注釋',
+        word: '落英繽紛',
+        chars: [],
+        definition: '落花繁多紛亂的樣子。英，指花。'
       }
     ];
 
     window.addEventListener('DOMContentLoaded', () => {
-      lucide.createIcons();
+      safeCreateIcons();
       loadDefaultSampleData();
 
-      // 設定拖曳上傳支援
+      // 若全字庫 CDN 載入完成，刷新題庫中尚未填妥的注音
+      setTimeout(() => {
+        let needsUpdate = false;
+        questionBank.forEach(q => {
+          if (q.type === '國字注音' && q.chars) {
+            q.chars.forEach(c => {
+              if (!c.zhuyin) {
+                const detected = autoDetectZhuyin(c.char);
+                if (detected) {
+                  c.zhuyin = detected;
+                  needsUpdate = true;
+                }
+              }
+            });
+          }
+        });
+        if (needsUpdate) {
+          renderQuestionList();
+        }
+      }, 500);
+
       const dropZone = document.getElementById('drop-zone');
       if (dropZone) {
         dropZone.addEventListener('dragover', (e) => {
@@ -1104,31 +1282,27 @@
       }
     });
 
-    // 載入預設題庫
     function loadDefaultSampleData() {
       questionBank = JSON.parse(JSON.stringify(SAMPLE_DATA));
       selectedQuestionIds.clear();
-      // 預設全選康軒第一課的題目
-      questionBank.filter(q => q.version === '康軒').forEach(q => selectedQuestionIds.add(q.id));
+      // 預設選取前 15 題國字注音，方便即時檢視排版效果
+      questionBank.filter(q => q.type === '國字注音').slice(0, 15).forEach(q => selectedQuestionIds.add(q.id));
       
       initFilterDropdowns();
       renderQuestionList();
       renderExamPaper();
-      showToast('已載入多版本課次示範題庫！');
+      showToast('已載入 15 題國字注音試卷樣式！');
     }
 
-    // 初始化版本與課次下拉選單
     function initFilterDropdowns() {
       const versionSelect = document.getElementById('filter-version');
       const currentSelectedVer = versionSelect.value || 'all';
-
-      // 取得不重複版本清單
       const versions = Array.from(new Set(questionBank.map(q => q.version || '未分類'))).filter(Boolean);
       
-      let vHtml = `<option value="all">所有版本 (${questionBank.length})</option>`;
+      let vHtml = `<option value="all">所有版本 (共 ${versions.length} 個版本)</option>`;
       versions.forEach(v => {
         const count = questionBank.filter(q => q.version === v).length;
-        vHtml += `<option value="${v}">${v} (${count})</option>`;
+        vHtml += `<option value="${v}">${v} (${count} 題)</option>`;
       });
       versionSelect.innerHTML = vHtml;
 
@@ -1142,7 +1316,6 @@
       updateTypeTabs();
     }
 
-    // 當版本變更時，更新課次選單
     function onVersionChange() {
       updateLessonDropdown();
       onFilterChange();
@@ -1151,14 +1324,13 @@
     function updateLessonDropdown() {
       const version = document.getElementById('filter-version').value;
       const lessonSelect = document.getElementById('filter-lesson');
-      
       const filteredByVer = questionBank.filter(q => version === 'all' || q.version === version);
       const lessons = Array.from(new Set(filteredByVer.map(q => q.lesson || '未分類'))).filter(Boolean);
 
-      let lHtml = `<option value="all">所有課次 (${filteredByVer.length})</option>`;
+      let lHtml = `<option value="all">所有課次 (共 ${lessons.length} 個課次)</option>`;
       lessons.forEach(l => {
         const count = filteredByVer.filter(q => q.lesson === l).length;
-        lHtml += `<option value="${l}">${l} (${count})</option>`;
+        lHtml += `<option value="${l}">${l} (${count} 題)</option>`;
       });
       lessonSelect.innerHTML = lHtml;
       lessonSelect.value = 'all';
@@ -1177,11 +1349,9 @@
       onFilterChange();
     }
 
-    // 將目前選中的版本與課次直接套用到考卷抬頭
     function applyFilterToTitle() {
       const v = document.getElementById('filter-version').value;
       const l = document.getElementById('filter-lesson').value;
-
       let titleStr = '';
       if (v !== 'all') titleStr += `${v}版 `;
       if (l !== 'all') titleStr += `${l} `;
@@ -1192,16 +1362,21 @@
       showToast(`已將「${titleStr}」套用至考卷標題！`);
     }
 
-    // 取得當前篩選條件下的題目
     function getFilteredQuestions() {
       const v = document.getElementById('filter-version').value;
       const l = document.getElementById('filter-lesson').value;
       const kw = document.getElementById('search-keyword').value.trim().toLowerCase();
 
       return questionBank.filter(q => {
-        if (v !== 'all' && q.version !== v) return false;
-        if (l !== 'all' && q.lesson !== l) return false;
-        if (currentActiveTab !== 'all' && q.type !== currentActiveTab) return false;
+        // 如果目前處於「已選」分頁，只要題目有被勾選即可顯示，不受版本課次篩選限制（或者可在當前篩選下查看已選）
+        if (currentActiveTab === 'selected') {
+          if (!selectedQuestionIds.has(q.id)) return false;
+        } else {
+          if (v !== 'all' && q.version !== v) return false;
+          if (l !== 'all' && q.lesson !== l) return false;
+          if (currentActiveTab !== 'all' && q.type !== currentActiveTab) return false;
+        }
+
         if (kw) {
           const matchWord = (q.word || '').toLowerCase().includes(kw);
           const matchDef = (q.definition || '').toLowerCase().includes(kw);
@@ -1213,14 +1388,12 @@
       });
     }
 
-    // 更新題型 Tab
     function updateTypeTabs() {
-      const types = ['全部', '國字注音', '注釋'];
       const tabsContainer = document.getElementById('type-tabs');
-      
       const v = document.getElementById('filter-version').value;
       const l = document.getElementById('filter-lesson').value;
       const baseList = questionBank.filter(q => (v === 'all' || q.version === v) && (l === 'all' || q.lesson === l));
+      const selectedCount = selectedQuestionIds.size;
 
       let html = `
         <button onclick="switchTab('all')" class="px-2.5 py-1 rounded-md transition whitespace-nowrap ${currentActiveTab === 'all' ? 'bg-indigo-600 text-white font-bold' : 'text-slate-600 hover:bg-slate-100'}">
@@ -1238,6 +1411,15 @@
         `;
       });
 
+      // 額外新增「已選題」專屬檢視分頁
+      const isSelectedActive = currentActiveTab === 'selected';
+      html += `
+        <button onclick="switchTab('selected')" class="px-2.5 py-1 rounded-md transition whitespace-nowrap flex items-center gap-1 ${isSelectedActive ? 'bg-amber-600 text-white font-bold' : 'text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200'}">
+          <span>已選題目</span>
+          <span class="px-1.5 py-0.2 rounded-full text-[10px] ${isSelectedActive ? 'bg-white text-amber-700' : 'bg-amber-200 text-amber-900'}">${selectedCount}</span>
+        </button>
+      `;
+
       tabsContainer.innerHTML = html;
     }
 
@@ -1247,7 +1429,6 @@
       renderQuestionList();
     }
 
-    // 解析國字注音題在考卷上的題幹與作答項目
     function buildQuestionExamDisplay(q, viewMode = 'student') {
       if (!q.chars || q.chars.length === 0) {
         q.chars = (q.word || '').split('').map(c => ({
@@ -1264,7 +1445,6 @@
       q.chars.forEach((cObj, idx) => {
         const detectedPy = cObj.zhuyin || autoDetectZhuyin(cObj.char) || '';
         if (cObj.mode === 'zhuyin') {
-          // 考注音：題目印國字，用「」標記並加底線，作答格填注音（正常字重，不粗體）
           promptHtml += `「<span class="underline decoration-2 underline-offset-4 font-normal px-0.5">${cObj.char}</span>」`;
           textDisplay += `「${cObj.char}」`;
           testItems.push({
@@ -1275,7 +1455,6 @@
             answer: detectedPy || '（未設注音）'
           });
         } else if (cObj.mode === 'char') {
-          // 考國字：題目印注音，用「」標記，作答格填國字（正常字重，不粗體）
           const py = detectedPy || '（音）';
           promptHtml += `「<span class="font-normal text-indigo-950 border-b-2 border-indigo-500 px-0.5 mx-0.5">${py}</span>」`;
           textDisplay += `「${py}」`;
@@ -1299,7 +1478,6 @@
       };
     }
 
-    // 渲染左側題庫清單（包含可點選的詞彙字元）
     function renderQuestionList() {
       const listContainer = document.getElementById('question-list-container');
       const filtered = getFilteredQuestions();
@@ -1313,7 +1491,7 @@
             沒有符合篩選條件的試題
           </div>
         `;
-        lucide.createIcons();
+        safeCreateIcons();
         return;
       }
 
@@ -1328,7 +1506,6 @@
               <input type="checkbox" id="chk-${q.id}" ${isChecked ? 'checked' : ''} onchange="toggleQuestion('${q.id}')" class="mt-1 rounded text-indigo-600 focus:ring-0 cursor-pointer">
               
               <div class="flex-1 min-w-0">
-                <!-- 標籤列：版本、課次、題型 -->
                 <div class="flex items-center justify-between text-[11px] mb-1.5">
                   <div class="flex items-center gap-1.5">
                     <span class="font-semibold px-1.5 py-0.2 rounded bg-slate-200 text-slate-700">${q.version || '國文'}</span>
@@ -1338,7 +1515,6 @@
                   <span class="text-slate-400">#${idx + 1}</span>
                 </div>
 
-                <!-- 詞彙字元互動點擊區 -->
                 ${isZhuyinType ? renderInteractiveWord(q) : `
                   <div class="text-sm font-bold text-slate-900 tracking-wide mb-1">${q.word}</div>
                   <div class="text-xs text-slate-600 font-sans line-clamp-2 bg-slate-50 p-1.5 rounded border border-slate-100">
@@ -1352,13 +1528,11 @@
       });
 
       listContainer.innerHTML = html;
-      lucide.createIcons();
+      safeCreateIcons();
     }
 
-    // 生成詞彙中每個字的點選膠囊按鈕
     function renderInteractiveWord(q) {
       if (!q.chars || q.chars.length === 0) {
-        // 若 chars 尚未拆解，即時拆解並自動偵測注音
         q.chars = q.word.split('').map(c => ({
           char: c,
           mode: 'none',
@@ -1371,7 +1545,6 @@
         let badgeStyle = 'bg-slate-100 text-slate-700 border-slate-200 hover:border-indigo-400 hover:bg-indigo-50/50';
         let statusTag = '';
 
-        // 若原先無注音，動態嘗試自動獲取
         if (!cObj.zhuyin) {
           cObj.zhuyin = autoDetectZhuyin(cObj.char);
         }
@@ -1383,7 +1556,6 @@
           badgeStyle = 'bg-indigo-100 text-indigo-900 border-indigo-300 font-bold shadow-xs';
           statusTag = `<span class="text-[9px] px-1 rounded bg-indigo-200/80 ml-0.5">考字: ${cObj.char}</span>`;
         } else {
-          // 未設定考點時，若已偵測到注音，以淡小字提示
           const autoPy = cObj.zhuyin || autoDetectZhuyin(cObj.char);
           if (autoPy) {
             statusTag = `<span class="text-[9px] px-1 text-slate-400 ml-0.5 font-normal">${autoPy}</span>`;
@@ -1391,14 +1563,13 @@
         }
 
         badgesHtml += `
-          <button type="button" onclick="openCharEditModal('${q.id}', ${cIdx})" title="點擊切換考國字/考注音（系統已自動偵測注音）" class="inline-flex items-center px-2 py-1 rounded-lg text-xs border transition transform active:scale-95 cursor-pointer ${badgeStyle}">
+          <button type="button" onclick="openCharEditModal('${q.id}', ${cIdx})" title="點擊設定考國字或考注音" class="inline-flex items-center px-2 py-1 rounded-lg text-xs border transition transform active:scale-95 cursor-pointer ${badgeStyle}">
             <span class="text-sm font-semibold">${cObj.char}</span>
             ${statusTag}
           </button>
         `;
       });
 
-      // 產生在考卷上的即時呈現說明
       const previewTitle = buildQuestionExamDisplay(q, 'student');
       const hasSelectedTestChar = q.chars.some(c => c.mode !== 'none');
 
@@ -1420,16 +1591,12 @@
       `;
     }
 
-    // 開啟單字設定彈窗（自動帶入系統偵測之注音）
     function openCharEditModal(qId, cIdx) {
       const q = questionBank.find(item => item.id === qId);
       if (!q || !q.chars[cIdx]) return;
 
       const cObj = q.chars[cIdx];
-      // 若原先無注音，由系統自動偵測注音
       const detectedZhuyin = cObj.zhuyin || autoDetectZhuyin(cObj.char) || '';
-
-      // 若原先尚未設定模式，預設快速設為「考注音」讓老師少點一步
       const defaultMode = cObj.mode === 'none' ? 'zhuyin' : cObj.mode;
 
       editingCharContext = {
@@ -1444,7 +1611,6 @@
       document.getElementById('modal-word-display').innerText = `出自詞彙：「${q.word}」之第 ${cIdx + 1} 個字 (${q.version || ''} ${q.lesson || ''})`;
       document.getElementById('modal-zhuyin-input').value = detectedZhuyin;
 
-      // 若有自動偵測到注音，顯示小標籤提示老師
       const autoBadge = document.getElementById('modal-zhuyin-auto-badge');
       if (detectedZhuyin && autoDetectZhuyin(cObj.char) === detectedZhuyin) {
         autoBadge.classList.remove('hidden');
@@ -1452,18 +1618,14 @@
         autoBadge.classList.add('hidden');
       }
 
-      // 檢查是否為多音字／破音字，動態產生快捷切換標籤
       renderPolyphoneOptions(cObj.char);
-
       updateModalModeButtons(editingCharContext.mode);
       document.getElementById('char-edit-modal').classList.remove('hidden');
     }
 
-    // 渲染多音字／破音字推薦快捷列
     function renderPolyphoneOptions(char) {
       let polyContainer = document.getElementById('polyphone-options-container');
       if (!polyContainer) {
-        // 若容器尚未建立，在注音輸入框上方動態插入
         const zhuyinGroup = document.getElementById('modal-zhuyin-group');
         polyContainer = document.createElement('div');
         polyContainer.id = 'polyphone-options-container';
@@ -1474,44 +1636,35 @@
       const polyList = POLYPHONE_DICT[char];
       if (polyList && polyList.length > 0) {
         polyContainer.classList.remove('hidden');
-        let btns = polyList.map(item => {
-          return `
-            <button type="button" onclick="setZhuyinDirectly('${item.py}')" class="px-2 py-1 bg-white hover:bg-indigo-600 hover:text-white border border-indigo-200 rounded-md text-[11px] font-medium transition shadow-2xs flex items-center gap-1">
-              <span class="font-bold text-indigo-700 hover:text-white">${item.py}</span>
-              <span class="text-slate-500 hover:text-white/90 text-[10px]">(${item.desc})</span>
-            </button>
-          `;
-        }).join('');
+        let btns = polyList.map(item => `
+          <button type="button" onclick="setZhuyinDirectly('${item.py}')" class="px-2 py-1 bg-white hover:bg-indigo-600 hover:text-white border border-indigo-200 rounded-md text-[11px] font-medium transition shadow-2xs flex items-center gap-1">
+            <span class="font-bold text-indigo-700 hover:text-white">${item.py}</span>
+            <span class="text-slate-500 hover:text-white/90 text-[10px]">(${item.desc})</span>
+          </button>
+        `).join('');
 
         polyContainer.innerHTML = `
           <div class="font-bold text-indigo-950 text-[11px] mb-1 flex items-center gap-1">
             <i data-lucide="split" class="w-3.5 h-3.5 text-indigo-600"></i>
-            此字為多音字／破音字，點擊快速指定本題讀音：
+            多音字／破音字快選：
           </div>
           <div class="flex flex-wrap gap-1.5">${btns}</div>
         `;
-        lucide.createIcons();
+        safeCreateIcons();
       } else {
         polyContainer.classList.add('hidden');
       }
     }
 
-    // 多音字一鍵填入注音
     function setZhuyinDirectly(py) {
       const input = document.getElementById('modal-zhuyin-input');
       input.value = py;
       editingCharContext.zhuyin = py;
-      if (editingCharContext.mode !== 'none') {
-        updateModalModeButtons(editingCharContext.mode);
-      }
-      showToast(`已套用注音：${py}（僅套用於此題）`);
+      showToast(`已套用注音：${py}`);
     }
 
-    // 切換單字出題模式 (不測驗 / 考注音 / 考國字)
     function selectCharMode(mode) {
       editingCharContext.mode = mode;
-      
-      // 若切換至出題模式且目前尚未有注音，自動填入偵測注音
       if (mode !== 'none') {
         const inputEl = document.getElementById('modal-zhuyin-input');
         if (!inputEl.value.trim()) {
@@ -1525,121 +1678,6 @@
       updateModalModeButtons(mode);
     }
 
-    // 解析二維陣列資料為題庫（國字注音免輸入答案，注釋需輸入答案）
-    function parseRawMatrixToQuestionBank(rows) {
-      if (!rows || rows.length === 0) {
-        showToast('檔案中沒有資料！');
-        return;
-      }
-
-      let startIndex = 0;
-      const firstRow = rows[0].map(c => String(c || '').trim());
-      const headerKeywords = ['版本', '課次', '題型', '題目', '詞彙', '答案', '注音', '釋義', '注釋'];
-      const hasHeader = firstRow.some(col => headerKeywords.some(kw => col.includes(kw)));
-      if (hasHeader) {
-        startIndex = 1;
-      }
-
-      const newQuestions = [];
-      for (let i = startIndex; i < rows.length; i++) {
-        const r = rows[i];
-        if (!r || r.length === 0) continue;
-
-        const cells = r.map(c => String(c !== undefined && c !== null ? c : '').trim());
-        if (cells.every(c => c === '')) continue;
-
-        let ver = '自訂版本';
-        let les = '自訂課次';
-        let type = '國字注音';
-        let word = '';
-        let def = '';
-
-        // 彈性相容常見欄位排法
-        if (cells.length >= 5) {
-          ver = cells[0] || '未分類';
-          les = cells[1] || '未分類';
-          type = cells[2] || (cells[4] ? '注釋' : '國字注音');
-          word = cells[3] || '';
-          // 第 5 欄：若為注釋則為答案
-          def = cells[4] || (cells[5] || '');
-        } else if (cells.length === 4) {
-          ver = cells[0] || '未分類';
-          les = cells[1] || '未分類';
-          type = cells[2] || '國字注音';
-          word = cells[3] || '';
-        } else if (cells.length === 3) {
-          type = cells[0] || '國字注音';
-          word = cells[1] || '';
-          if (type.includes('注釋')) def = cells[2] || '';
-        } else {
-          word = cells[0] || '';
-          def = cells[1] || '';
-        }
-
-        if (!word) continue;
-
-        if (!type || type === '未分類') {
-          type = def ? '注釋' : '國字注音';
-        }
-
-        // 拆解每個字元並透過內建注音庫自動偵測注音
-        const charList = word.split('').map(char => {
-          const autoPy = autoDetectZhuyin(char);
-          return {
-            char,
-            mode: 'none', // 預設每個字皆不考，由教師自行點選考國字或考注音
-            zhuyin: autoPy
-          };
-        });
-
-        newQuestions.push({
-          id: 'q_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
-          version: ver,
-          lesson: les,
-          type: type,
-          word: word,
-          chars: charList,
-          definition: def
-        });
-      }
-
-      if (newQuestions.length === 0) {
-        showToast('未能辨識出任何試題，請檢查格式！');
-        return;
-      }
-
-      questionBank = newQuestions;
-      selectedQuestionIds.clear();
-      questionBank.forEach(q => selectedQuestionIds.add(q.id));
-
-      initFilterDropdowns();
-      renderQuestionList();
-      renderExamPaper();
-      showToast(`成功匯入 ${newQuestions.length} 題試題！預設為未考狀態，請點字指定考點。`);
-    }
-
-    // 下載範本 CSV（國字注音免填答案，注釋填入答案）
-    function downloadSampleExcel() {
-      const csvContent = "\uFEFF版本,課次,題型,詞彙,注釋答案\n" +
-        "康軒,第一課 夏夜,國字注音,吹毛求疵,\n" +
-        "康軒,第一課 夏夜,國字注音,提綱挈領,\n" +
-        "康軒,第一課 夏夜,注釋,豁然開朗,形容開闊明亮，亦指突然悟出道理。\n" +
-        "翰林,第一課 兒時記趣,國字注音,相形見絀,\n" +
-        "翰林,第一課 兒時記趣,注釋,世外桃源,比喻環境幽靜美好、遠離俗世喧擾的安樂理想境界。\n" +
-        "南一,第二課 背影,國字注音,敷衍了事,\n" +
-        "南一,第二課 背影,注釋,躊躇,猶豫不決、遲疑不進的樣子。\n";
-
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.setAttribute("href", url);
-      link.setAttribute("download", "國語文小卷題庫範本(國字注音免填答案).csv");
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      showToast('已下載簡化版範本檔案！');
-    }
-
     function updateModalModeButtons(mode) {
       const bNone = document.getElementById('btn-mode-none');
       const bZhu = document.getElementById('btn-mode-zhuyin');
@@ -1650,10 +1688,8 @@
       const currentChar = editingCharContext.char || '字';
       const currentZhuyin = document.getElementById('modal-zhuyin-input').value.trim() || editingCharContext.zhuyin || '注音';
 
-      // 基礎未選中樣式
       const baseUnselected = 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 shadow-xs';
 
-      // 1. 不測驗
       if (mode === 'none') {
         bNone.className = 'p-2.5 border-2 rounded-xl text-center transition flex flex-col items-center justify-center cursor-pointer bg-slate-800 border-slate-800 text-white shadow-md ring-2 ring-slate-800/20';
         bZhu.className = `p-2.5 border-2 rounded-xl text-center transition flex flex-col items-center justify-center cursor-pointer ${baseUnselected}`;
@@ -1662,9 +1698,7 @@
         hintBox.className = 'mt-1 p-2 rounded-lg bg-slate-100 border border-slate-200 text-[11px] text-slate-700 flex items-center gap-1.5';
         hintText.innerHTML = `試卷上直接顯示一般字「<b class="font-serif text-xs text-slate-900">${currentChar}</b>」，學生<b>不需</b>作答此字。`;
         zhuyinGroup.classList.add('opacity-50', 'pointer-events-none');
-      } 
-      // 2. 考注音
-      else if (mode === 'zhuyin') {
+      } else if (mode === 'zhuyin') {
         bNone.className = `p-2.5 border-2 rounded-xl text-center transition flex flex-col items-center justify-center cursor-pointer ${baseUnselected}`;
         bZhu.className = 'p-2.5 border-2 rounded-xl text-center transition flex flex-col items-center justify-center cursor-pointer bg-amber-600 border-amber-600 text-white shadow-md ring-2 ring-amber-600/30';
         bChar.className = `p-2.5 border-2 rounded-xl text-center transition flex flex-col items-center justify-center cursor-pointer ${baseUnselected}`;
@@ -1672,9 +1706,7 @@
         hintBox.className = 'mt-1 p-2 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-900 flex items-center gap-1.5';
         hintText.innerHTML = `考卷題目印「<b class="font-serif text-xs">${currentChar}</b>」➔ 學生在方格中寫注音「<b class="text-xs text-amber-700">${currentZhuyin}</b>」。`;
         zhuyinGroup.classList.remove('opacity-50', 'pointer-events-none');
-      } 
-      // 3. 考國字
-      else if (mode === 'char') {
+      } else if (mode === 'char') {
         bNone.className = `p-2.5 border-2 rounded-xl text-center transition flex flex-col items-center justify-center cursor-pointer ${baseUnselected}`;
         bZhu.className = `p-2.5 border-2 rounded-xl text-center transition flex flex-col items-center justify-center cursor-pointer ${baseUnselected}`;
         bChar.className = 'p-2.5 border-2 rounded-xl text-center transition flex flex-col items-center justify-center cursor-pointer bg-indigo-600 border-indigo-600 text-white shadow-md ring-2 ring-indigo-600/30';
@@ -1683,26 +1715,27 @@
         hintText.innerHTML = `考卷題目印「<b class="text-xs">${currentZhuyin}</b>」➔ 學生在方格中寫國字「<b class="font-serif text-xs text-indigo-700">${currentChar}</b>」。`;
         zhuyinGroup.classList.remove('opacity-50', 'pointer-events-none');
       }
-
-      lucide.createIcons();
+      safeCreateIcons();
     }
 
     function appendTone(tone) {
       const input = document.getElementById('modal-zhuyin-input');
-      input.value = input.value.trim() + tone;
-      input.focus();
-      // 同步更新提示文字
+      let val = input.value.replace(/[ˊˇˋ˙]/g, '');
+      if (tone === '˙') {
+        input.value = tone + val;
+      } else {
+        input.value = val + tone;
+      }
+      editingCharContext.zhuyin = input.value;
       if (editingCharContext.mode !== 'none') {
         updateModalModeButtons(editingCharContext.mode);
       }
     }
 
-    // 關閉單字設定彈窗
     function closeCharEditModal() {
       document.getElementById('char-edit-modal').classList.add('hidden');
     }
 
-    // 儲存單字設定
     function saveCharEdit() {
       const { questionId, charIndex, mode } = editingCharContext;
       const q = questionBank.find(item => item.id === questionId);
@@ -1710,7 +1743,6 @@
         const zhuyinVal = document.getElementById('modal-zhuyin-input').value.trim();
         q.chars[charIndex].mode = mode;
         q.chars[charIndex].zhuyin = zhuyinVal;
-        // 注意：不直接覆蓋全域預設，保持各版本、各課次多音字的獨立性
       }
       closeCharEditModal();
       renderQuestionList();
@@ -1718,7 +1750,6 @@
       showToast('已儲存此字出題設定！');
     }
 
-    // 單題選取切換
     function toggleQuestion(id) {
       if (selectedQuestionIds.has(id)) {
         selectedQuestionIds.delete(id);
@@ -1729,21 +1760,16 @@
       renderExamPaper();
     }
 
-    // 全選或取消全選當前篩選之題目
     function toggleSelectAllFiltered(checked) {
       const filtered = getFilteredQuestions();
       filtered.forEach(q => {
-        if (checked) {
-          selectedQuestionIds.add(q.id);
-        } else {
-          selectedQuestionIds.delete(q.id);
-        }
+        if (checked) selectedQuestionIds.add(q.id);
+        else selectedQuestionIds.delete(q.id);
       });
       renderQuestionList();
       renderExamPaper();
     }
 
-    // 清空已選題目
     function clearCurrentSelection() {
       selectedQuestionIds.clear();
       const chkAll = document.getElementById('select-all-filtered');
@@ -1753,7 +1779,6 @@
       showToast('已清空選取題目！');
     }
 
-    // 隨機自當前篩選抽題
     function randomPickCurrentFiltered() {
       const countInput = document.getElementById('random-count-input');
       const count = Math.max(1, parseInt(countInput.value, 10) || 5);
@@ -1763,7 +1788,6 @@
         return;
       }
 
-      // 洗牌並取出
       const shuffled = [...filtered].sort(() => 0.5 - Math.random());
       const picked = shuffled.slice(0, count);
 
@@ -1775,37 +1799,93 @@
       showToast(`已隨機選取 ${picked.length} 題！`);
     }
 
-    // 切換學生測驗卷 / 教師解答卷
     function setPaperMode(mode) {
       currentPaperMode = mode;
       const btnStu = document.getElementById('view-mode-student');
       const btnTea = document.getElementById('view-mode-teacher');
+      const btnPun = document.getElementById('view-mode-punish');
       const hint = document.getElementById('teacher-answer-hint');
 
+      if (btnStu) btnStu.className = 'px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition-all font-medium';
+      if (btnTea) btnTea.className = 'px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition-all font-medium';
+      if (btnPun) btnPun.className = 'px-3 py-1.5 rounded-md text-amber-700 hover:text-amber-900 transition-all font-medium flex items-center gap-1';
+
       if (mode === 'teacher') {
-        btnTea.className = 'px-3 py-1.5 rounded-md bg-rose-600 text-white shadow-sm font-semibold transition-all';
-        btnStu.className = 'px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition-all';
-        if (hint) hint.classList.remove('hidden');
+        if (btnTea) btnTea.className = 'px-3 py-1.5 rounded-md bg-rose-600 text-white shadow-sm font-semibold transition-all';
+        if (hint) {
+          hint.classList.remove('hidden');
+          hint.innerText = '[解答版]';
+          hint.className = 'text-rose-600 font-sans font-bold text-xs';
+        }
+      } else if (mode === 'punish') {
+        if (btnPun) btnPun.className = 'px-3 py-1.5 rounded-md bg-amber-600 text-white shadow-sm font-semibold transition-all flex items-center gap-1';
+        if (hint) {
+          hint.classList.remove('hidden');
+          hint.innerText = '[訂正簽章]';
+          hint.className = 'text-amber-700 font-sans font-bold text-xs';
+        }
       } else {
-        btnStu.className = 'px-3 py-1.5 rounded-md bg-white text-slate-800 shadow-sm font-semibold transition-all';
-        btnTea.className = 'px-3 py-1.5 rounded-md text-slate-600 hover:text-slate-900 transition-all';
+        if (btnStu) btnStu.className = 'px-3 py-1.5 rounded-md bg-white text-slate-800 shadow-sm font-semibold transition-all';
         if (hint) hint.classList.add('hidden');
       }
       renderExamPaper();
     }
 
-    // 繪製 A4 考卷內容
     function renderExamPaper() {
       const paperBody = document.getElementById('paper-body');
       const schoolDisplay = document.getElementById('paper-school-display');
       const titleDisplay = document.getElementById('paper-title-display');
       const scoreBadge = document.getElementById('total-score-badge');
+      const scoreBoxLabel = document.getElementById('paper-score-label');
+      const paperHeader = document.getElementById('paper-header-container');
+      const paperFooter = document.getElementById('paper-footer-container');
+      const paperElement = document.getElementById('paper-element');
 
       const schoolName = document.getElementById('cfg-school').value || '市立國民中學';
       const examTitle = document.getElementById('cfg-title').value || '國文科隨堂測驗';
+      const isPunishMode = currentPaperMode === 'punish';
+
+      // 罰寫訂正卷完全隱藏表頭與頁尾，釋放最大列印面積
+      if (paperHeader) {
+        if (isPunishMode) {
+          paperHeader.style.display = 'none';
+          paperHeader.classList.add('hidden');
+        } else {
+          paperHeader.style.display = 'block';
+          paperHeader.classList.remove('hidden');
+        }
+      }
+
+      if (paperFooter) {
+        if (isPunishMode) {
+          paperFooter.style.display = 'none';
+        } else {
+          paperFooter.style.display = 'block';
+        }
+      }
+
+      if (paperElement) {
+        if (isPunishMode) {
+          paperElement.classList.add('is-punish');
+        } else {
+          paperElement.classList.remove('is-punish');
+        }
+      }
+
+      if (paperBody) {
+        if (isPunishMode) {
+          paperBody.className = 'pt-0 space-y-2';
+        } else {
+          paperBody.className = 'pt-4 space-y-6';
+        }
+      }
 
       schoolDisplay.innerText = schoolName;
       titleDisplay.innerText = examTitle;
+
+      if (scoreBoxLabel) {
+        scoreBoxLabel.innerText = '得分';
+      }
 
       const scoreZhuyin = parseFloat(document.getElementById('cfg-score-zhuyin').value) || 2;
       const scoreDef = parseFloat(document.getElementById('cfg-score-def').value) || 4;
@@ -1826,11 +1906,10 @@
           </div>
         `;
         scoreBadge.innerText = '總分: 0 分 (0 題)';
-        lucide.createIcons();
+        safeCreateIcons();
         return;
       }
 
-      // 分類已選題目
       const zhuyinList = selectedList.filter(q => q.type === '國字注音');
       const defList = selectedList.filter(q => q.type === '注釋');
       const otherList = selectedList.filter(q => q.type !== '國字注音' && q.type !== '注釋');
@@ -1840,96 +1919,119 @@
       const numChinese = ['一', '二', '三', '四', '五'];
       let html = '';
 
+      // 罰寫模式不印說明文字，直接從題目開始
       // 1. 國字注音大題
       if (zhuyinList.length > 0) {
         const secScore = zhuyinList.length * scoreZhuyin;
         totalScore += secScore;
-        const secTitle = `${numChinese[sectionIndex - 1]}、寫出國字或注音（每題 ${scoreZhuyin} 分，共 ${secScore} 分）`;
+        const secTitle = isPunishMode
+          ? `${numChinese[sectionIndex - 1]}、國字注音（請將畫記之題目於下方橫線抄寫 3 次）`
+          : `${numChinese[sectionIndex - 1]}、寫出國字或注音（每題 ${scoreZhuyin} 分，共 ${secScore} 分）`;
         sectionIndex++;
 
-        // 智慧整理題目長度：若開啟長題置底，將可並排的短題擺在前面成對排列，長題挪到最後
         let orderedZhuyinList = [...zhuyinList];
-        if (isDoubleCol && autoSortLength) {
+        if (!isPunishMode && isDoubleCol && autoSortLength) {
           const compactList = [];
           const wideList = [];
-
           orderedZhuyinList.forEach(q => {
             const parsed = buildQuestionExamDisplay(q, currentPaperMode);
             const itemsToTest = parsed.testItems.length > 0 ? parsed.testItems : [{ char: '', zhuyin: '', mode: 'none', answer: '' }];
             const isWide = (q.word && q.word.length >= 5) || itemsToTest.length >= 2 || (q.word && q.word.length + itemsToTest.length * 2 >= 8);
-            if (isWide) {
-              wideList.push(q);
-            } else {
-              compactList.push(q);
-            }
+            if (isWide) wideList.push(q);
+            else compactList.push(q);
           });
-
-          // 重新組合：短題在前、長題在後
           orderedZhuyinList = [...compactList, ...wideList];
         }
 
-        const gridClass = isDoubleCol ? 'grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3' : 'space-y-3';
-
         let itemsHtml = '';
         orderedZhuyinList.forEach((q, idx) => {
-          const parsed = buildQuestionExamDisplay(q, currentPaperMode);
-          let boxesHtml = '';
+          if (isPunishMode) {
+            let punishPrompt = '';
+            (q.chars || []).forEach(cObj => {
+              const detectedPy = cObj.zhuyin || autoDetectZhuyin(cObj.char) || '';
+              if (cObj.mode === 'zhuyin' || cObj.mode === 'char') {
+                punishPrompt += `「<span class="font-normal underline decoration-2 underline-offset-4 px-0.5">${cObj.char}</span><span class="text-rose-600 font-sans text-xs font-bold ml-0.5">(${detectedPy})</span>」`;
+              } else {
+                punishPrompt += cObj.char;
+              }
+            });
 
-          const hasTestItems = parsed.testItems.length > 0;
-          const itemsToTest = hasTestItems ? parsed.testItems : [{ char: '', zhuyin: '', mode: 'none', answer: '' }];
+            itemsHtml += `
+              <div class="page-break-inside-avoid py-1.5 px-2 border-b border-dashed border-slate-200">
+                <div class="flex items-center text-[15px]">
+                  <span class="mr-1.5 font-normal text-slate-800">(${idx + 1})</span>
+                  <span class="tracking-wide text-slate-900">${punishPrompt}</span>
+                </div>
+                <div class="mt-1.5 grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-sm">
+                  <div class="flex items-center border-b border-slate-400 pb-0.5">
+                    <span class="text-xs text-slate-400 font-bold mr-1.5 select-none">①</span>
+                  </div>
+                  <div class="flex items-center border-b border-slate-400 pb-0.5">
+                    <span class="text-xs text-slate-400 font-bold mr-1.5 select-none">②</span>
+                  </div>
+                  <div class="flex items-center border-b border-slate-400 pb-0.5">
+                    <span class="text-xs text-slate-400 font-bold mr-1.5 select-none">③</span>
+                  </div>
+                </div>
+              </div>
+            `;
+          } else {
+            const parsed = buildQuestionExamDisplay(q, currentPaperMode);
+            let boxesHtml = '';
+            const hasTestItems = parsed.testItems.length > 0;
+            const itemsToTest = hasTestItems ? parsed.testItems : [{ char: '', zhuyin: '', mode: 'none', answer: '' }];
 
-          if (showBox) {
-            // 一個字一格
-            boxesHtml = `<div class="inline-flex items-center gap-1.5 ml-2 flex-shrink-0">`;
-            if (hasTestItems) {
-              itemsToTest.forEach(item => {
-                const ansText = currentPaperMode === 'teacher' ? item.answer : '';
-                const gridStyle = tianGrid ? 'tian-grid' : '';
-                const contentHtml = currentPaperMode === 'teacher' ? renderAnswerBoxContent(ansText) : '';
+            if (showBox) {
+              boxesHtml = `<div class="inline-flex items-center gap-1.5 ml-2 flex-shrink-0">`;
+              if (hasTestItems) {
+                itemsToTest.forEach(item => {
+                  const ansText = currentPaperMode === 'teacher' ? item.answer : '';
+                  const gridStyle = tianGrid ? 'tian-grid' : '';
+                  const contentHtml = currentPaperMode === 'teacher' ? renderAnswerBoxContent(ansText) : '';
+                  boxesHtml += `
+                    <div class="char-box ${gridStyle}">
+                      ${contentHtml}
+                    </div>
+                  `;
+                });
+              } else {
                 boxesHtml += `
-                  <div class="char-box ${gridStyle}">
-                    ${contentHtml}
+                  <div class="char-box border-dashed border-slate-300 text-[11px] text-slate-400">
+                    <span class="text-[10px] scale-90">${currentPaperMode === 'teacher' ? '未設' : ''}</span>
                   </div>
                 `;
-              });
+              }
+              boxesHtml += `</div>`;
             } else {
-              // 老師尚未指定該題考哪一個字時的預覽方格
-              boxesHtml += `
-                <div class="char-box border-dashed border-slate-300 text-[11px] text-slate-400">
-                  <span class="text-[10px] scale-90">${currentPaperMode === 'teacher' ? '未設' : ''}</span>
-                </div>
-              `;
+              const answerStr = currentPaperMode === 'teacher' 
+                ? (hasTestItems ? parsed.testItems.map(i => i.answer).join(', ') : '未設考點')
+                : '　　';
+              boxesHtml = `<span class="ml-2">（ <span class="text-rose-600 font-bold">${answerStr}</span> ）</span>`;
             }
-            boxesHtml += `</div>`;
-          } else {
-            // 括號填空
-            const answerStr = currentPaperMode === 'teacher' 
-              ? (hasTestItems ? parsed.testItems.map(i => i.answer).join(', ') : '未設考點')
-              : '　　';
-            boxesHtml = `<span class="ml-2">（ <span class="text-rose-600 font-bold">${answerStr}</span> ）</span>`;
-          }
 
-          // 智慧排版偵測：計算文字長度與答題格子數
-          const isWideQuestion = (q.word && q.word.length >= 5) || itemsToTest.length >= 2 || (q.word && q.word.length + itemsToTest.length * 2 >= 8);
-          const colSpanClass = (isDoubleCol && isWideQuestion) ? 'sm:col-span-2 bg-slate-50/50 rounded-lg' : '';
+            const isWideQuestion = (q.word && q.word.length >= 5) || itemsToTest.length >= 2 || (q.word && q.word.length + itemsToTest.length * 2 >= 8);
+            const colSpanClass = (isDoubleCol && isWideQuestion) ? 'sm:col-span-2 bg-slate-50/50 rounded-lg' : '';
 
-          itemsHtml += `
-            <div class="page-break-inside-avoid flex items-center justify-between py-1 px-2 rounded hover:bg-slate-50 text-base leading-relaxed ${colSpanClass}">
-              <div class="flex items-center min-w-0 pr-2 flex-wrap">
-                <span class="font-normal mr-1.5 text-base text-slate-800">(${idx + 1})</span>
-                <span class="tracking-widest text-[17px] font-normal text-slate-900">${parsed.promptHtml}</span>
+            itemsHtml += `
+              <div class="page-break-inside-avoid flex items-center justify-between py-1 px-2 rounded hover:bg-slate-50 text-base leading-relaxed ${colSpanClass}">
+                <div class="flex items-center min-w-0 pr-2 flex-wrap">
+                  <span class="font-normal mr-1.5 text-base text-slate-800">(${idx + 1})</span>
+                  <span class="tracking-widest text-[17px] font-normal text-slate-900">${parsed.promptHtml}</span>
+                </div>
+                ${boxesHtml}
               </div>
-              ${boxesHtml}
-            </div>
-          `;
+            `;
+          }
         });
+
+        const containerClass = isPunishMode ? 'space-y-1' : (isDoubleCol ? 'grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3' : 'space-y-3');
 
         html += `
           <div class="space-y-2">
             <h3 class="text-base font-bold tracking-wider text-slate-900 border-b border-slate-300 pb-1">
               ${secTitle}
             </h3>
-            <div class="${gridClass} pt-1">
+            <div class="${containerClass} pt-1">
               ${itemsHtml}
             </div>
           </div>
@@ -1940,25 +2042,50 @@
       if (defList.length > 0) {
         const secScore = defList.length * scoreDef;
         totalScore += secScore;
-        const secTitle = `${numChinese[sectionIndex - 1]}、注釋（每題 ${scoreDef} 分，共 ${secScore} 分）`;
+        const secTitle = isPunishMode
+          ? `${numChinese[sectionIndex - 1]}、注釋（請將畫記之題目於下方橫線抄寫 3 次）`
+          : `${numChinese[sectionIndex - 1]}、注釋（每題 ${scoreDef} 分，共 ${secScore} 分）`;
         sectionIndex++;
 
         let itemsHtml = '';
         defList.forEach((q, idx) => {
-          const ansText = currentPaperMode === 'teacher'
-            ? `<span class="text-rose-600 font-bold ml-2 text-sm">${q.definition}</span>`
-            : '';
-          itemsHtml += `
-            <div class="page-break-inside-avoid py-1.5 px-2 rounded hover:bg-slate-50">
-              <div class="flex items-baseline">
-                <span class="font-normal mr-1.5 text-base text-slate-800">(${idx + 1})</span>
-                <span class="font-normal text-base tracking-wider mr-2 text-slate-900">${q.word}：</span>
-                <div class="flex-1 border-b border-slate-400 min-h-[24px] inline-flex items-center px-1">
-                  ${ansText}
+          if (isPunishMode) {
+            itemsHtml += `
+              <div class="page-break-inside-avoid py-2 px-2 border-b border-dashed border-slate-200">
+                <div class="text-base tracking-wide text-slate-900">
+                  <span class="font-normal mr-1.5 text-slate-800">(${idx + 1})</span>
+                  <span class="font-bold text-slate-950">${q.word}：</span>
+                  <span class="text-slate-700">${q.definition}</span>
+                </div>
+                <div class="mt-2 space-y-2 text-sm">
+                  <div class="flex items-center border-b border-slate-400 pb-1">
+                    <span class="text-xs text-slate-400 font-bold mr-2 select-none">①</span>
+                  </div>
+                  <div class="flex items-center border-b border-slate-400 pb-1">
+                    <span class="text-xs text-slate-400 font-bold mr-2 select-none">②</span>
+                  </div>
+                  <div class="flex items-center border-b border-slate-400 pb-1">
+                    <span class="text-xs text-slate-400 font-bold mr-2 select-none">③</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          `;
+            `;
+          } else {
+            const ansText = currentPaperMode === 'teacher'
+              ? `<span class="text-rose-600 font-bold ml-2 text-sm">${q.definition}</span>`
+              : '';
+            itemsHtml += `
+              <div class="page-break-inside-avoid py-1.5 px-2 rounded hover:bg-slate-50">
+                <div class="flex items-baseline">
+                  <span class="font-normal mr-1.5 text-base text-slate-800">(${idx + 1})</span>
+                  <span class="font-normal text-base tracking-wider mr-2 text-slate-900">${q.word}：</span>
+                  <div class="flex-1 border-b border-slate-400 min-h-[24px] inline-flex items-center px-1">
+                    ${ansText}
+                  </div>
+                </div>
+              </div>
+            `;
+          }
         });
 
         html += `
@@ -2008,15 +2135,60 @@
       }
 
       paperBody.innerHTML = html;
-      scoreBadge.innerText = `總分: ${totalScore} 分 (${selectedList.length} 題)`;
+      scoreBadge.innerText = isPunishMode ? `訂正卷 (${selectedList.length} 題全列)` : `總分: ${totalScore} 分 (${selectedList.length} 題)`;
+
+      // 即時重新計算並渲染 A4 換頁輔助線
+      setTimeout(updatePageBreakIndicators, 50);
     }
 
-    // 處理檔案上傳
+    // 計算並繪製 A4 換頁分界線 (以標準 297mm 換算像素高度)
+    function updatePageBreakIndicators() {
+      const paperElement = document.getElementById('paper-element');
+      if (!paperElement) return;
+
+      // 移除現存分頁標記
+      const oldLines = paperElement.querySelectorAll('.page-break-line, .page-break-label');
+      oldLines.forEach(el => el.remove());
+
+      // 1mm 約等於 3.7795px (96 DPI)
+      const a4HeightPx = 297 * 3.7795;
+      const currentScrollHeight = paperElement.scrollHeight;
+
+      if (currentScrollHeight <= a4HeightPx + 5) {
+        return; // 單頁之內不顯示換頁線
+      }
+
+      let pageCount = Math.floor(currentScrollHeight / a4HeightPx);
+      for (let p = 1; p <= pageCount; p++) {
+        const topPx = p * a4HeightPx;
+        if (topPx >= currentScrollHeight - 10) break;
+
+        const line = document.createElement('div');
+        line.className = 'page-break-line no-print';
+        line.style.top = `${topPx}px`;
+
+        const label = document.createElement('div');
+        label.className = 'page-break-label no-print';
+        label.style.top = `${topPx}px`;
+        label.innerHTML = `
+          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m8 17 4 4 4-4"/></svg>
+          <span>第 ${p} 頁結束 / 第 ${p + 1} 頁開始</span>
+        `;
+
+        paperElement.appendChild(line);
+        paperElement.appendChild(label);
+      }
+    }
+
+    window.addEventListener('resize', () => {
+      updatePageBreakIndicators();
+    });
+
     function handleFileUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
       readFileData(file);
-      event.target.value = ''; // 重置 input 讓同名檔案能再次觸發
+      event.target.value = '';
     }
 
     function readFileData(file) {
@@ -2025,10 +2197,18 @@
         try {
           const data = new Uint8Array(e.target.result);
           const workbook = XLSX.read(data, { type: 'array' });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-          parseRawMatrixToQuestionBank(rows);
+          
+          pendingWorkbook = workbook;
+          pendingFileName = file.name;
+
+          // 若僅有單一分頁且已存在題庫，或有多個分頁，呼叫彈窗讓老師選取分頁與匯入模式
+          if (workbook.SheetNames.length > 1 || questionBank.length > 0) {
+            openSheetSelectModal(workbook.SheetNames);
+          } else {
+            const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+            const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+            parseRawMatrixToQuestionBank(rows, 'replace');
+          }
         } catch (err) {
           console.error(err);
           showToast('讀取檔案失敗，請確認檔案格式是否正確！');
@@ -2037,53 +2217,397 @@
       reader.readAsArrayBuffer(file);
     }
 
-    // 解析貼上的純文字
+    function openSheetSelectModal(sheetNames) {
+      const modal = document.getElementById('sheet-select-modal');
+      const listContainer = document.getElementById('sheet-list-container');
+      const filenameLabel = document.getElementById('sheet-modal-filename');
+
+      // 防禦性檢查：若彈窗元素不存在，自動執行預設讀取第一個工作表，避免拋出 TypeError
+      if (!modal || !listContainer || !filenameLabel) {
+        if (pendingWorkbook && pendingWorkbook.SheetNames && pendingWorkbook.SheetNames.length > 0) {
+          const firstSheet = pendingWorkbook.Sheets[pendingWorkbook.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+          parseRawMatrixToQuestionBank(rows, questionBank.length > 0 ? 'append' : 'replace');
+        }
+        return;
+      }
+
+      filenameLabel.innerText = `檔案：${pendingFileName} (共 ${sheetNames.length} 個工作表)`;
+
+      let html = '';
+      sheetNames.forEach((name, idx) => {
+        const sheet = pendingWorkbook.Sheets[name];
+        const range = XLSX.utils.decode_range(sheet['!ref'] || 'A1:A1');
+        const estRows = Math.max(0, range.e.r - range.s.r + 1);
+
+        html += `
+          <label class="flex items-center justify-between p-2.5 border rounded-xl cursor-pointer hover:bg-slate-50 transition ${idx === 0 ? 'border-indigo-300 bg-indigo-50/20' : 'border-slate-200'}">
+            <div class="flex items-center gap-2">
+              <input type="radio" name="target-sheet-name" value="${name}" ${idx === 0 ? 'checked' : ''} class="text-indigo-600 focus:ring-0">
+              <span class="font-bold text-slate-800">${name}</span>
+            </div>
+            <span class="text-[11px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">約 ${estRows} 列</span>
+          </label>
+        `;
+      });
+
+      listContainer.innerHTML = html;
+      modal.classList.remove('hidden');
+      safeCreateIcons();
+    }
+
+    function closeSheetSelectModal() {
+      const modal = document.getElementById('sheet-select-modal');
+      if (modal) {
+        modal.classList.add('hidden');
+      }
+      pendingWorkbook = null;
+    }
+
+    function confirmSheetImport() {
+      if (!pendingWorkbook) return;
+      const selectedSheetRadio = document.querySelector('input[name="target-sheet-name"]:checked');
+      const sheetName = selectedSheetRadio ? selectedSheetRadio.value : pendingWorkbook.SheetNames[0];
+
+      const importModeRadio = document.querySelector('input[name="import-mode"]:checked');
+      const importMode = importModeRadio ? importModeRadio.value : 'append'; // 'append' | 'replace'
+
+      const sheet = pendingWorkbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+
+      parseRawMatrixToQuestionBank(rows, importMode);
+      closeSheetSelectModal();
+    }
+
     function processPastedText() {
       const text = document.getElementById('paste-textarea').value.trim();
       if (!text) {
         showToast('請先貼上資料！');
         return;
       }
-
       const lines = text.split(/\r\n|\n|\r/);
       const matrix = lines.map(line => line.split('\t'));
-      parseRawMatrixToQuestionBank(matrix);
+      parseRawMatrixToQuestionBank(matrix, 'append');
       closePasteModal();
     }
 
-    // 彈窗控制
-    function openPasteModal() {
-      document.getElementById('paste-modal').classList.remove('hidden');
-    }
-    function closePasteModal() {
-      document.getElementById('paste-modal').classList.add('hidden');
-    }
-    function openFormatGuideModal() {
-      document.getElementById('format-guide-modal').classList.remove('hidden');
-    }
-    function closeFormatGuideModal() {
-      document.getElementById('format-guide-modal').classList.add('hidden');
+    // 智慧型多欄位對齊與自適應試題解析引擎
+    function parseRawMatrixToQuestionBank(rows, importMode = 'replace') {
+      if (!rows || rows.length === 0) {
+        showToast('檔案中沒有資料！');
+        return;
+      }
+
+      // 1. 智慧尋找表頭列（在前 5 列中搜尋最像標題的列）
+      let headerRowIndex = -1;
+      let colMap = { version: -1, lesson: -1, type: -1, word: -1, def: -1, zhuyin: -1 };
+
+      for (let r = 0; r < Math.min(rows.length, 5); r++) {
+        const row = (rows[r] || []).map(c => String(c !== undefined && c !== null ? c : '').trim());
+        let foundWord = -1, foundDef = -1, foundVer = -1, foundLes = -1, foundType = -1, foundZhu = -1;
+
+        row.forEach((cell, idx) => {
+          if (!cell) return;
+          // 清除內部所有空格與標點符號進行比對
+          const clean = cell.replace(/[\s\/\-_|、，,]/g, '').toLowerCase();
+
+          // 題型欄優先判定，避免含「字」的詞被誤判
+          if (foundType === -1 && /^(題型|類型|大題|出題題型)$/i.test(clean)) {
+            foundType = idx;
+            return;
+          }
+          if (foundVer === -1 && /^(版本|冊別|冊|教材版本)$/i.test(clean)) {
+            foundVer = idx;
+            return;
+          }
+          if (foundLes === -1 && /^(課次|單元|課名|課|單元課次)$/i.test(clean)) {
+            foundLes = idx;
+            return;
+          }
+          if (foundDef === -1 && /^(注釋|釋義|解釋|說明|答案|意思|義|注釋釋義|注釋答案)$/i.test(clean)) {
+            foundDef = idx;
+            return;
+          }
+          if (foundZhu === -1 && /^(注音|讀音|音|字音)$/i.test(clean)) {
+            foundZhu = idx;
+            return;
+          }
+          // 詞彙欄判斷：包含詞、字、題目、成語，且不為題型或注釋
+          if (foundWord === -1 && /(詞彙|詞語|生字|生詞|題目|成語|字詞|單字|語詞|試題|生字難詞|詞)/i.test(clean) && !/(題型|注釋|釋義|解釋|注音)/i.test(clean)) {
+            foundWord = idx;
+          }
+        });
+
+        // 只要能命中詞彙或注釋或版本等核心關鍵字，就認定該列為表頭
+        if (foundWord !== -1 || (foundVer !== -1 && foundLes !== -1) || (foundDef !== -1 && foundType !== -1)) {
+          headerRowIndex = r;
+          colMap = {
+            version: foundVer,
+            lesson: foundLes,
+            type: foundType,
+            word: foundWord,
+            def: foundDef,
+            zhuyin: foundZhu
+          };
+          break;
+        }
+      }
+
+      const startIndex = headerRowIndex !== -1 ? headerRowIndex + 1 : 0;
+      const newQuestions = [];
+
+      for (let i = startIndex; i < rows.length; i++) {
+        const r = rows[i];
+        if (!r || r.length === 0) continue;
+        const cells = r.map(c => String(c !== undefined && c !== null ? c : '').trim());
+        if (cells.every(c => c === '')) continue;
+
+        let ver = '自訂版本', les = '自訂課次', type = '', word = '', def = '', explicitZhu = '';
+
+        if (headerRowIndex !== -1) {
+          // 有精準表頭定位
+          if (colMap.version !== -1 && cells[colMap.version]) ver = cells[colMap.version];
+          if (colMap.lesson !== -1 && cells[colMap.lesson]) les = cells[colMap.lesson];
+          if (colMap.type !== -1 && cells[colMap.type]) type = cells[colMap.type];
+          if (colMap.word !== -1 && cells[colMap.word]) word = cells[colMap.word];
+          if (colMap.def !== -1 && cells[colMap.def]) def = cells[colMap.def];
+          if (colMap.zhuyin !== -1 && cells[colMap.zhuyin]) explicitZhu = cells[colMap.zhuyin];
+
+          // 若 word 未對應到或誤抓為題型，自動從剩餘欄位尋找真正詞彙（徹底排除題型欄與版本欄）
+          if (!word || word === '國字注音' || word === '注釋') {
+            const potentialWords = cells.filter((c, idx) => {
+              if (!c) return false;
+              if (idx === colMap.def || idx === colMap.version || idx === colMap.lesson || idx === colMap.type || idx === colMap.zhuyin) return false;
+              if (c === '國字注音' || c === '注釋' || c === '選擇題') return false;
+              return true;
+            });
+            if (potentialWords.length > 0) word = potentialWords[0];
+          }
+        } else {
+          // 無表頭啟發式推斷
+          if (cells.length >= 5) {
+            ver = cells[0] || '未分類';
+            les = cells[1] || '未分類';
+            type = cells[2] || (cells[4] ? '注釋' : '國字注音');
+            word = (cells[3] === '國字注音' || cells[3] === '注釋') ? cells[4] : cells[3];
+            def = (cells[3] === '國字注音' || cells[3] === '注釋') ? cells[5] || '' : cells[4] || '';
+          } else if (cells.length === 4) {
+            ver = cells[0] || '未分類';
+            les = cells[1] || '未分類';
+            // 若第 2 欄是題型（國字注音/注釋），則第 3 欄為詞彙
+            if (cells[2] === '國字注音' || cells[2] === '注釋') {
+              type = cells[2];
+              word = cells[3] || '';
+            } else {
+              type = '國字注音';
+              word = cells[2] || cells[3];
+            }
+          } else if (cells.length === 3) {
+            if (cells[0] === '國字注音' || cells[0] === '注釋') {
+              type = cells[0];
+              word = cells[1] || '';
+              def = cells[2] || '';
+            } else {
+              type = '國字注音';
+              word = cells[1] || cells[0];
+              def = cells[2] || '';
+            }
+          } else {
+            word = cells[0] || '';
+            def = cells[1] || '';
+          }
+        }
+
+        // 防呆校驗：若 word 被誤判成題型關鍵字，予以修正
+        if (word === '國字注音' || word === '注釋') {
+          continue;
+        }
+
+        if (!word) continue;
+        if (!type || type === '未分類') {
+          type = def ? '注釋' : '國字注音';
+        }
+
+        // 拆解單字並自動偵測注音
+        const charList = word.split('').map((char, cIdx) => {
+          let zhu = autoDetectZhuyin(char);
+          // 若試算表有整題的注音，且剛好是單字時對應
+          if (explicitZhu && word.length === 1) zhu = explicitZhu;
+          return {
+            char,
+            mode: 'none',
+            zhuyin: zhu
+          };
+        });
+
+        newQuestions.push({
+          id: 'q_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+          version: ver,
+          lesson: les,
+          type: type,
+          word: word,
+          chars: charList,
+          definition: def
+        });
+      }
+
+      if (newQuestions.length === 0) {
+        showToast('未能辨識出任何試題，請檢查欄位內容！');
+        return;
+      }
+
+      if (importMode === 'replace') {
+        questionBank = newQuestions;
+        selectedQuestionIds.clear();
+        questionBank.forEach(q => selectedQuestionIds.add(q.id));
+        showToast(`已替換題庫，成功載入 ${newQuestions.length} 題！`);
+      } else {
+        // 合併匯入
+        questionBank = questionBank.concat(newQuestions);
+        newQuestions.forEach(q => selectedQuestionIds.add(q.id));
+        showToast(`已成功追加 ${newQuestions.length} 題！目前題庫共計 ${questionBank.length} 題。`);
+      }
+
+      initFilterDropdowns();
+      renderQuestionList();
+      renderExamPaper();
     }
 
-    // 列印與匯出彈窗控制
+    function downloadSampleExcel() {
+      const csvContent = "\uFEFF版本,課次,題型,詞彙,注釋答案\n" +
+        "康軒,第一課 夏夜,國字注音,吹毛求疵,\n" +
+        "康軒,第一課 夏夜,國字注音,提綱挈領,\n" +
+        "康軒,第一課 夏夜,注釋,豁然開朗,形容開闊明亮，亦指突然悟出道理。\n" +
+        "翰林,第一課 兒時記趣,國字注音,相形見絀,\n" +
+        "翰林,第一課 兒時記趣,注釋,世外桃源,比喻環境幽靜美好、遠離俗世喧擾的安樂理想境界。\n" +
+        "南一,第二課 背影,國字注音,敷衍了事,\n" +
+        "南一,第二課 背影,注釋,躊躇,猶豫不決、遲疑不進的樣子。\n";
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", "國語文小卷題庫範本(國字注音免填答案).csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast('已下載簡化版範本檔案！');
+    }
+
+    function openPasteModal() { document.getElementById('paste-modal').classList.remove('hidden'); }
+    function closePasteModal() { document.getElementById('paste-modal').classList.add('hidden'); }
+
+    function openManualAddModal() {
+      const currentVer = document.getElementById('filter-version').value;
+      const currentLes = document.getElementById('filter-lesson').value;
+
+      document.getElementById('manual-version').value = currentVer !== 'all' ? currentVer : '';
+      document.getElementById('manual-lesson').value = currentLes !== 'all' ? currentLes : '';
+      document.getElementById('manual-word').value = '';
+      document.getElementById('manual-definition').value = '';
+
+      const radZhu = document.querySelector('input[name="manual-type"][value="國字注音"]');
+      if (radZhu) radZhu.checked = true;
+      onManualTypeChange('國字注音');
+
+      document.getElementById('manual-add-modal').classList.remove('hidden');
+      setTimeout(() => {
+        const wordInput = document.getElementById('manual-word');
+        if (wordInput) wordInput.focus();
+      }, 100);
+      safeCreateIcons();
+    }
+
+    function closeManualAddModal() {
+      document.getElementById('manual-add-modal').classList.add('hidden');
+    }
+
+    function onManualTypeChange(type) {
+      const defGroup = document.getElementById('manual-def-group');
+      const wordLabel = document.getElementById('manual-word-label');
+      if (type === '注釋') {
+        defGroup.classList.remove('hidden');
+        wordLabel.innerText = '注釋詞彙';
+      } else {
+        defGroup.classList.add('hidden');
+        wordLabel.innerText = '詞彙 / 題目';
+      }
+    }
+
+    function saveManualQuestion(continueAdding = false) {
+      const word = document.getElementById('manual-word').value.trim();
+      const version = document.getElementById('manual-version').value.trim() || '自訂版本';
+      const lesson = document.getElementById('manual-lesson').value.trim() || '自訂課次';
+      const typeRadio = document.querySelector('input[name="manual-type"]:checked');
+      const type = typeRadio ? typeRadio.value : '國字注音';
+      const def = document.getElementById('manual-definition').value.trim();
+      const autoSelect = document.getElementById('manual-auto-select').checked;
+
+      if (!word) {
+        showToast('請填寫詞彙或題目！');
+        document.getElementById('manual-word').focus();
+        return;
+      }
+
+      if (type === '注釋' && !def) {
+        showToast('請填寫注釋釋義！');
+        document.getElementById('manual-definition').focus();
+        return;
+      }
+
+      const charList = word.split('').map(char => ({
+        char,
+        mode: 'none',
+        zhuyin: autoDetectZhuyin(char)
+      }));
+
+      const newQ = {
+        id: 'q_manual_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+        version,
+        lesson,
+        type,
+        word,
+        chars: charList,
+        definition: def
+      };
+
+      questionBank.unshift(newQ);
+
+      if (autoSelect) {
+        selectedQuestionIds.add(newQ.id);
+      }
+
+      initFilterDropdowns();
+      renderQuestionList();
+      renderExamPaper();
+
+      if (continueAdding) {
+        document.getElementById('manual-word').value = '';
+        document.getElementById('manual-definition').value = '';
+        document.getElementById('manual-word').focus();
+        showToast(`已成功新增「${word}」，請繼續輸入下一題！`);
+      } else {
+        closeManualAddModal();
+        showToast(`已成功新增「${word}」！`);
+      }
+    }
+
+    function openFormatGuideModal() { document.getElementById('format-guide-modal').classList.remove('hidden'); }
+    function closeFormatGuideModal() { document.getElementById('format-guide-modal').classList.add('hidden'); }
+
     function openExportModal() {
-      // 預設將選取項與目前檢視模式連動
       const radioCurrent = document.querySelector(`input[name="export-target-mode"][value="${currentPaperMode}"]`);
       if (radioCurrent) radioCurrent.checked = true;
       document.getElementById('export-modal').classList.remove('hidden');
-      lucide.createIcons();
+      safeCreateIcons();
     }
-    function closeExportModal() {
-      document.getElementById('export-modal').classList.add('hidden');
-    }
+    function closeExportModal() { document.getElementById('export-modal').classList.add('hidden'); }
 
-    // 取得使用者在匯出彈窗中選定的模式 ('student' | 'teacher' | 'both')
     function getSelectedExportMode() {
       const checkedRadio = document.querySelector('input[name="export-target-mode"]:checked');
       return checkedRadio ? checkedRadio.value : currentPaperMode;
     }
 
-    // 1. 匯出為 Word 檔 (.doc)
     function triggerExportWord() {
       const mode = getSelectedExportMode();
       closeExportModal();
@@ -2093,7 +2617,10 @@
     function downloadWordDoc(mode) {
       const schoolName = document.getElementById('cfg-school').value || '考卷';
       const examTitle = document.getElementById('cfg-title').value || '隨堂測驗';
-      const modeLabel = mode === 'both' ? '學生卷與解答卷(雙卷)' : (mode === 'teacher' ? '教師解答卷' : '學生測驗卷');
+      let modeLabel = '學生測驗卷';
+      if (mode === 'both') modeLabel = '學生卷與解答卷(雙卷)';
+      else if (mode === 'teacher') modeLabel = '教師解答卷';
+      else if (mode === 'punish') modeLabel = '課堂訂正罰寫卷(抄三次)';
 
       let bodyHtml = '';
       if (mode === 'both') {
@@ -2106,42 +2633,18 @@
         bodyHtml = `<div>${getRenderedPaperHtml(mode)}</div>`;
       }
 
-      // 構建相容 Microsoft Word 的標準文件結構
       const wordHtml = `
         <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
         <head>
           <meta charset='utf-8'>
           <title>${schoolName} - ${examTitle}</title>
           <style>
-            @page {
-              size: A4 portrait;
-              margin: 1.5cm 1.5cm 1.5cm 1.5cm;
-              mso-page-orientation: portrait;
-            }
-            body {
-              font-family: 'DFKai-SB', 'BiauKai', 'Noto Serif TC', 'Times New Roman', serif;
-              font-size: 12pt;
-              line-height: 1.5;
-              color: #000;
-            }
-            .char-box {
-              border: 1.5pt solid #000;
-              width: 24pt;
-              height: 24pt;
-              line-height: 24pt;
-              text-align: center;
-              display: inline-block;
-              font-size: 11pt;
-              font-family: 'DFKai-SB', serif;
-            }
-            .tian-grid {
-              position: relative;
-            }
+            @page { size: A4 portrait; margin: 1.5cm; }
+            body { font-family: 'DFKai-SB', 'BiauKai', 'Noto Serif TC', serif; font-size: 12pt; line-height: 1.5; color: #000; }
+            .char-box { border: 1.5pt solid #000; width: 24pt; height: 24pt; line-height: 24pt; text-align: center; display: inline-block; }
           </style>
         </head>
-        <body>
-          ${bodyHtml}
-        </body>
+        <body>${bodyHtml}</body>
         </html>
       `;
 
@@ -2157,45 +2660,37 @@
       showToast(`已成功下載 Word 檔「${modeLabel}」！可在 Word 中直接列印。`);
     }
 
-    // 2. 下載離線 HTML
     function triggerExportHtml() {
       const mode = getSelectedExportMode();
       closeExportModal();
       downloadPaperHtml(mode);
     }
 
-    // 3. 在新分頁開啟
     function triggerExportNewWindow() {
       const mode = getSelectedExportMode();
       closeExportModal();
       handlePrintNewWindow(mode);
     }
 
-    // 4. 直接列印（含攔截錯誤保護）
     function triggerExportDirectPrint() {
       const mode = getSelectedExportMode();
       closeExportModal();
-      
-      // 若選取的是不同模式，先切換並重新渲染
       if (mode !== 'both' && mode !== currentPaperMode) {
         setPaperMode(mode);
       }
-
       if (mode === 'both') {
         handlePrintNewWindow('both');
         return;
       }
-
       try {
         window.print();
       } catch (err) {
-        console.warn('Direct print blocked by sandbox, switching to new window or download:', err);
-        showToast('瀏覽器預覽環境限制了直接列印，為您自動開啟新分頁！');
+        console.warn('Direct print blocked, switching to new window:', err);
+        showToast('為您自動開啟新分頁列印！');
         handlePrintNewWindow(mode);
       }
     }
 
-    // 取得指定模式（'student' 或 'teacher'）下的純考卷 HTML
     function getRenderedPaperHtml(mode) {
       const prevMode = currentPaperMode;
       currentPaperMode = mode;
@@ -2206,20 +2701,20 @@
       return paperHtml;
     }
 
-    // 產生完整的獨立可列印網頁 HTML
     function buildStandalonePrintHtml(mode = 'current') {
       const schoolName = document.getElementById('cfg-school').value || '考卷';
       const examTitle = document.getElementById('cfg-title').value || '隨堂測驗';
+      const targetMode = mode === 'current' ? currentPaperMode : mode;
 
       let pagesContent = '';
-      if (mode === 'both') {
+      if (targetMode === 'both') {
         pagesContent = `
           <div class="print-page">${getRenderedPaperHtml('student')}</div>
           <div style="page-break-before: always;"></div>
           <div class="print-page">${getRenderedPaperHtml('teacher')}</div>
         `;
       } else {
-        pagesContent = `<div class="print-page">${getRenderedPaperHtml(mode === 'current' ? currentPaperMode : mode)}</div>`;
+        pagesContent = `<div class="print-page">${getRenderedPaperHtml(targetMode)}</div>`;
       }
 
       return `<!DOCTYPE html>
@@ -2229,109 +2724,60 @@
   <title>${schoolName} - ${examTitle}</title>
   <script src="https://cdn.tailwindcss.com"><\/script>
   <style>
-    .exam-paper-font,
-    .a4-page,
-    .a4-page * {
-      font-family: 'DFKai-SB', 'BiauKai', 'Kaiti TC', 'KaiTi', 'STKaiti', 'Noto Serif TC', serif !important;
+    .hidden { display: none !important; }
+    .exam-paper-font, .a4-page, .a4-page * {
+      font-family: 'DFKai-SB', 'BiauKai', 'Kaiti TC', 'KaiTi', 'STKaiti', serif !important;
     }
     .a4-page {
-      width: 210mm;
-      min-height: 297mm;
-      padding: 16mm 15mm;
-      margin: 0 auto 20px auto;
-      background: white;
-      box-sizing: border-box;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
+      width: 210mm; min-height: 297mm; padding: 6mm 10mm; margin: 0 auto 20px auto;
+      background: white; box-sizing: border-box; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.08);
       position: relative;
+    }
+    .a4-page.is-punish {
+      padding-top: 3mm !important;
+      padding-bottom: 3mm !important;
     }
     .char-box {
-      border: 1.5px solid #1f2937;
-      width: 38px;
-      height: 38px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-      background: #fff;
-      font-size: 1.15rem;
-      line-height: 1;
-      flex-shrink: 0;
-      overflow: hidden;
+      border: 1.5px solid #1f2937; width: 40px; height: 40px; display: inline-flex;
+      align-items: center; justify-content: center; position: relative; background: #fff;
     }
     .char-box.tian-grid::before {
-      content: '';
-      position: absolute;
-      left: 0;
-      top: 50%;
-      width: 100%;
-      height: 0;
-      border-top: 1.5px dashed #94a3b8;
-      z-index: 1;
-      pointer-events: none;
+      content: ''; position: absolute; left: 0; right: 0; top: 50%; border-top: 1.5px dashed #94a3b8;
     }
     .char-box.tian-grid::after {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: 50%;
-      width: 0;
-      height: 100%;
-      border-left: 1.5px dashed #94a3b8;
-      z-index: 1;
-      pointer-events: none;
-    }
-    .char-box > span {
-      position: relative;
-      z-index: 2;
+      content: ''; position: absolute; top: 0; bottom: 0; left: 50%; border-left: 1.5px dashed #94a3b8;
     }
     @media print {
-      @page { size: A4 portrait; margin: 10mm 12mm 10mm 12mm; }
-      body { background: white !important; padding: 0 !important; margin: 0 !important; }
-      .a4-page { box-shadow: none !important; border: none !important; width: 100% !important; min-height: auto !important; margin: 0 !important; padding: 0 !important; }
-      .no-print { display: none !important; }
-      .print-page { page-break-after: always; }
-      .page-break-inside-avoid { page-break-inside: avoid; }
+      @page { size: A4 portrait; margin: 0; }
+      html, body { background: white !important; padding: 0 !important; margin: 0 !important; }
+      .a4-page { box-shadow: none !important; border: none !important; width: 100% !important; min-height: auto !important; margin: 0 !important; padding: 6mm 10mm !important; }
+      .a4-page.is-punish { padding-top: 3mm !important; padding-bottom: 3mm !important; }
+      .no-print { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; }
+      .print-page { page-break-after: auto; }
+      .page-break-inside-avoid { break-inside: avoid !important; }
     }
   </style>
 </head>
 <body>
-  <div class="no-print" style="max-width: 210mm; margin: 0 auto 16px auto; display: flex; justify-content: space-between; align-items: center; background: white; padding: 12px 20px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
-    <div style="font-size: 14px; font-weight: bold; color: #1e293b;">考卷列印預覽</div>
+  <div class="no-print" style="max-width: 210mm; margin: 0 auto 12px auto; display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border: 1px solid #cbd5e1; padding: 10px 16px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.05); font-family: system-ui, -apple-system, sans-serif;">
     <div>
-      <button onclick="window.print()" style="background: #4f46e5; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-size: 13px; font-weight: bold; cursor: pointer;">立即列印 / 存為 PDF</button>
+      <div style="font-size: 13px; font-weight: bold; color: #1e293b;">考卷列印專屬視窗</div>
+      <div style="font-size: 11px; color: #64748b; margin-top: 2px;">
+        💡 提示：若要完全消除頂部日期與網址，請在列印設定勾選<b>【邊界：無】</b>並<b>【取消勾選 頁首與頁尾】</b>
+      </div>
     </div>
+    <button onclick="window.print()" style="background: #4f46e5; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-size: 12px; font-weight: bold; cursor: pointer; white-space: nowrap;">立即列印 / 存為 PDF</button>
   </div>
   ${pagesContent}
   <script>
     window.onload = function() {
-      // 若為獨立開啟，延遲 300ms 自動觸發列印
-      setTimeout(function() {
-        window.print();
-      }, 350);
+      setTimeout(function() { window.print(); }, 350);
     };
   <\/script>
 </body>
 </html>`;
     }
 
-    // 1. 直接列印當前畫面
-    function handleDirectPrint() {
-      closeExportModal();
-      try {
-        window.print();
-      } catch (e) {
-        // 若受到 iframe 阻擋，自動備援以新分頁開啟
-        handlePrintNewWindow('current');
-      }
-    }
-
-    // 2. 一次列印學生卷＋解答卷
-    function handlePrintBoth() {
-      closeExportModal();
-      handlePrintNewWindow('both');
-    }
-
-    // 3. 以新分頁開啟列印
     function handlePrintNewWindow(mode) {
       const fullHtml = buildStandalonePrintHtml(mode);
       const printWin = window.open('', '_blank');
@@ -2340,18 +2786,16 @@
         printWin.document.write(fullHtml);
         printWin.document.close();
       } else {
-        // 若被瀏覽器阻擋彈跳視窗，自動改為下載離線檔案
-        showToast('彈跳視窗被瀏覽器阻擋，已為您自動下載為離線檔案！');
+        showToast('彈跳視窗被阻擋，已為您下載為離線檔案！');
         downloadPaperHtml(mode);
       }
     }
 
-    // 4. 下載離線 HTML 檔案（雙擊即可開啟列印，或以 Word 開啟編輯）
     function downloadPaperHtml(mode) {
       closeExportModal();
       const schoolName = document.getElementById('cfg-school').value || '考卷';
       const examTitle = document.getElementById('cfg-title').value || '隨堂測驗';
-      const modeLabel = mode === 'both' ? '學生卷與解答卷(雙卷)' : (mode === 'teacher' ? '教師解答卷' : '學生測驗卷');
+      const modeLabel = mode === 'both' ? '學生卷與解答卷(雙卷)' : (mode === 'teacher' ? '教師解答卷' : (mode === 'punish' ? '罰寫訂正卷' : '學生測驗卷'));
       
       const fullHtml = buildStandalonePrintHtml(mode);
       const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8;' });
@@ -2363,10 +2807,9 @@
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      showToast(`已下載「${modeLabel}」HTML 檔案！雙擊即可在瀏覽器或 Word 中開啟並列印。`);
+      showToast(`已下載「${modeLabel}」HTML 檔案！`);
     }
 
-    // 公版雲端題庫彈窗與網址設定（固定為指定公版 Google 試算表）
     const FIXED_CLOUD_SHEET_URL = 'https://docs.google.com/spreadsheets/d/17GvYi-a0-QbPPUNh8-cj4h4PW4iO06KmQdBUQzNd8Mo/edit?usp=sharing';
 
     function openPublicCloudModal() {
@@ -2389,7 +2832,6 @@
       showToast('已複製公版雲端題庫網址至剪貼簿！');
     }
 
-    // 自訂 Toast 提示
     function showToast(msg) {
       const toast = document.getElementById('toast');
       const msgEl = document.getElementById('toast-message');
